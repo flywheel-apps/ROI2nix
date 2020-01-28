@@ -32,8 +32,8 @@
     "label": {
       "description": "A single label for a binary mask",
       "enum": [
-        "dsf",
-        "ttt"
+        "Lesion",
+        "Cyst"
       ],
       "optional": true,
       "type": "string"

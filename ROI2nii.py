@@ -27,8 +27,7 @@ if __name__ == "__main__":
             z_coord = int(img_path[st+3:end])
             print(z_coord)
             #Initialize polygon coordinate lists
-            X = []
-            Y = []
+            
             if type(ROI["handles"]) == list:
                 for h in ROI['handles']:
                     X.append(h['x'])
