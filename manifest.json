@@ -12,7 +12,7 @@
   "custom": {
     "docker-image": "flywheel/roi2nix:0.0.1",
     "gear-builder": {
-      "category": "utility",
+      "category": "converter",
       "image": "flywheel/roi2nix:0.0.1"
     }
   },
