@@ -1,0 +1,43 @@
+{
+  "name": "roi2nix",
+  "label": "ROI to nifti",
+  "description": "This gear converts ROIs created in Flywheel's OHIF viewer to nifti files.",
+  "author": "Flywheel",
+  "maintainer": "Flywheel <support@flywheel.io>",
+  "license": "Other",
+  "url": "https://github.com/flywheel-apps/test-gear",
+  "source": "https://github.com/flywheel-apps/ROI2nix",
+  "cite": "",
+  "version": "0.0.1",
+  "custom": {
+    "docker-image": "flywheel/roi2nix:0.0.1",
+    "gear-builder": {
+      "category": "utility",
+      "image": "flywheel/roi2nix:0.0.1"
+    }
+  },
+  "inputs": {
+    "Input_File": {
+      "base": "file",
+      "description": "File with OHIF ROI ",
+      "optional": false,
+      "type": {
+        "enum": [
+          "nifti"
+        ]
+      }
+    }
+  },
+  "config": {
+    "label": {
+      "description": "A single label for a binary mask",
+      "enum": [
+        "dsf",
+        "ttt"
+      ],
+      "optional": true,
+      "type": "string"
+    }
+  },
+  "command": "/flywheel/v0/run.py"
+}
