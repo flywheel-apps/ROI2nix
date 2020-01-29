@@ -8,15 +8,18 @@
   "url": "https://github.com/flywheel-apps/test-gear",
   "source": "https://github.com/flywheel-apps/ROI2nix",
   "cite": "",
-  "version": "0.0.1",
+  "version": "0.0.1-dev-e",
   "custom": {
-    "docker-image": "flywheel/roi2nix:0.0.1",
+    "docker-image": "flywheel/roi2nix:0.0.1-dev-e",
     "gear-builder": {
       "category": "converter",
-      "image": "flywheel/roi2nix:0.0.1"
+      "image": "flywheel/roi2nix:0.0.1-dev-e"
     }
   },
   "inputs": {
+    "api-key": {
+        "base": "api-key"
+    },
     "Input_File": {
       "base": "file",
       "description": "File with OHIF ROI ",
@@ -32,6 +35,7 @@
     "label": {
       "description": "A single label for a binary mask",
       "enum": [
+        null,
         "Lesion",
         "Cyst"
       ],

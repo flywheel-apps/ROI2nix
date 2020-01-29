@@ -1,4 +1,5 @@
 from run import *
+import nibabel as nib
 
 if __name__ == "__main__":
     fw = flywheel.Client()
@@ -7,5 +8,8 @@ if __name__ == "__main__":
     acq = fw.get(acquisitions[0].id)
     Nifti = acq.files[1]
     shp = [166, 256, 256]
-    data = label2data('Neck', shp, Nifti.info)
+    data = np.zeros(shp)
+    data += label2data('Brain', shp, Nifti.info)
     print(data.shape)
+    
+    nib.save(nib.Nifti1Pair(data,np.eye(4)),'test.nii.gz')

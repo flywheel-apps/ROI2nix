@@ -32,9 +32,10 @@ WORKDIR ${FLYWHEEL}
 # Copy executable/manifest to Gear
 COPY run.py ${FLYWHEEL}/run.py
 COPY manifest.json ${FLYWHEEL}/manifest.json
+RUN chmod a+x /flywheel/v0/run.py
 
 # ENV preservation for Flywheel Engine
-RUN python -c 'import os, json; f = open("/tmp/gear_environ.json", "w");json.dump(dict(os.environ), f)'
+RUN python3 -c 'import os, json; f = open("/tmp/gear_environ.json", "w");json.dump(dict(os.environ), f)'
 
 ENTRYPOINT ["/flywheel/v0/run.py"]
 # Configure entrypoint
