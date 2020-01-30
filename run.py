@@ -5,13 +5,30 @@ from skimage import draw
 import numpy as np
 import nibabel as nb
 import logging
-
+from collections import OrderedDict
 import flywheel
 
 log = logging.getLogger(__name__)
 
 
 def poly2mask(vertex_row_coords, vertex_col_coords, shape):
+    """
+    poly2mask takes polygon vertex coordinates and turns them into a filled
+        polygon
+
+    Origin of this code was in a scikit-image issue:
+        https://github.com/scikit-image/scikit-image/issues/1103#issuecomment-52378754
+
+    Args:
+        vertex_row_coords (list): x-coordinates of the vertices
+        vertex_col_coords (list): y-coordinates of the vertices
+        shape (tuple): The size of the two-dimensional array to fill the
+            polygon
+
+    Returns:
+        numpy.Array: Two-Dimensional numpy array of boolean values: True
+            for within the polygon, False for outside the polygon
+    """
     fill_row_coords, fill_col_coords = draw.polygon(
         vertex_row_coords,
         vertex_col_coords,
@@ -24,7 +41,7 @@ def poly2mask(vertex_row_coords, vertex_col_coords, shape):
 
 def label2data(label, shape, info):
     """
-    label2data gives the roi data block for a nifti file with `shape` and 
+    label2data gives the roi data block for a nifti file with `shape` and
     `info`
 
     This iterates through polygons drawn in any orientation and renders the
@@ -69,8 +86,8 @@ def label2data(label, shape, info):
                 orientation_slice = [0, 0, 0]
 
             # initialize x,y-coordinate lists
-            shp_idx = [i for i, x in enumerate(orientation_axis) if x == 0]
-            orientation_shape = [shape[shp_idx[0]], shape[shp_idx[1]]]
+            shp_indx = [i for i, x in enumerate(orientation_axis) if x == 0]
+            orientation_shape = [shape[shp_indx[0]], shape[shp_indx[1]]]
 
             # Initialize x,y coordinates for each polygonal point
             X = []
@@ -78,6 +95,11 @@ def label2data(label, shape, info):
             if isinstance(roi["handles"], list):
                 for h in roi['handles']:
                     if orientation_char == 'x':
+                        # TODO: These may induce off-by-one errors
+                        # Potential fix:
+                        # orientation_shape[0] - h['x'] - 1
+                        # and for 'Y':
+                        # orientation_shape[1] - h['y'] - 1
                         X.append(
                             orientation_shape[0] - h['x']
                         )
@@ -123,23 +145,33 @@ if __name__ == '__main__':
 
         nii = nb.load(context.get_input_path('Input_File'))
 
-        labels = []
-        if 'label' in context.config.keys():
-            labels.append(context.config['label'])
-        else:
-            # only doing this for toolType=freehand
-            # TODO: Consider other closed regions:
-            # rectangleRoi, ellipticalRoi
+        # dictionary for labels, index, R, G, B, A
+        labels = OrderedDict()
+
+        # only doing this for toolType=freehand
+        # TODO: Consider other closed regions:
+        # rectangleRoi, ellipticalRoi
+        if 'roi' in file_obj.info.keys():
             for roi in file_obj.info['roi']:
                 if (roi['toolType'] == 'freehand') and \
-                   (roi['label'] not in labels):
-                    labels.append(roi['label'])
-        data = np.zeros(nii.shape[:3])
+                        (roi['label'] not in labels.keys()):
+                    # Only if annotation type is a polygon, then grab the 
+                    # label, create a 2^x index for bitmasking, grab the color
+                    # hash (e.g. #fbbc05), and translate it into RGB
+                    labels[roi['label']] = {
+                        'index': int(2**(len(labels))),
+                        'color': roi['color'],
+                        'RGB': [
+                            int(roi['color'][i: i+2], 16)
+                            for i in [1, 3, 5]
+                        ]
+                    }
+        else:
+            log.warning('No ROIs were found for this image.')
+        data = np.zeros(nii.shape[:3], dtype=int)
         for label in labels:
-            idx = 2**labels.index(label)
-            log.warning('%s is %i', label, idx)
-            data += idx * label2data(label, nii.shape[:3], file_obj.info)
-            log.info('max data value is %i.', data.max())
+            data += labels[label]['index'] * \
+                label2data(label, nii.shape[:3], file_obj.info)
 
         """
         TODO:
@@ -147,18 +179,55 @@ if __name__ == '__main__':
          or without the affine matrix?  If without, then the following is
          appropriate. If with, no... We may need to find another way to
          make sure the coordiates are displayed in the right orientation.
+
+         As long as the orientation matrix is not permuting the axes, we
+         should be fine. Permuted or reflected(negatively valued).
+
+         However, we need to find a case where this is so... and see how
+         we can accomodate.
         """
-        lbl_nii = nb.Nifti1Pair(data, nii.affine)
-
-        if len(labels) == 1:
-            fl_name = labels[0] + '_label_' + file_input['location']['name']
-        else:
+        if len(labels) > 1:
+            all_labels_nii = nb.Nifti1Pair(data.astype(float), nii.affine)
             fl_name = 'all_labels' + '_' + file_input['location']['name']
+            nb.save(all_labels_nii, op.join(context.output_dir, fl_name))
+        if len(labels) > 0:
+            for label in labels:
+                indx = labels[label]['index']
+                label_nii = nb.Nifti1Pair(
+                    np.bitwise_and(data, indx).astype(float),
+                    nii.affine
+                )
+                nb.save(
+                    label_nii,
+                    op.join(
+                        context.output_dir,
+                        label + '_label_' + file_input['location']['name']
+                    )
+                )
+        else:
+            log.warning('No ROIs were found for this image.')
 
-        nb.save(lbl_nii, op.join(context.output_dir, fl_name))
+        # Write Slicer color table file .cbtl
+        ctbl = open(
+            op.join(
+                context.output_dir,
+                'all_labels_' +
+                file_input['location']['name'][:-7] +
+                '.ctbl'
+            ),
+            'w'
+        )
+        for label in labels:
+            ctbl.write(
+                '{} '.format(labels[label]["index"]) +
+                '{} '.format(label) +
+                '{} '.format(labels[label]["RGB"][0]) +
+                '{} '.format(labels[label]["RGB"][1]) +
+                '{} '.format(labels[label]["RGB"][2]) +
+                '255\n'
+            )
 
-        # TODO: If a bunch of labels, do we want a mapping file
-        # (e.g. <label> <index> <color>) to translate?
+        ctbl.close()
 
     except Exception as e:
         context.log.fatal(e,)
