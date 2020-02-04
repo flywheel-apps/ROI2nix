@@ -69,7 +69,7 @@ def label2data(label, shape, info):
             orientation_coordinate = int(img_path[
                 img_path.find('#') + 3:
                 img_path.find(',')
-            ])
+            ]) - 1
 
             if orientation_char == 'z':
                 orientation_axis = [0, 0, 1]
@@ -79,7 +79,7 @@ def label2data(label, shape, info):
                 orientation_slice = data[:, orientation_coordinate, :]
             elif orientation_char == 'x':
                 orientation_axis = [1, 0, 0]
-                orientation_slice = data[orientation_coordinate, :, :]
+                orientation_slice = data[orientation_coordinate + 1, :, :]
             else:
                 log.warning('Orientation character not recognized.')
                 orientation_axis = ''
@@ -95,11 +95,6 @@ def label2data(label, shape, info):
             if isinstance(roi["handles"], list):
                 for h in roi['handles']:
                     if orientation_char == 'x':
-                        # TODO: These may induce off-by-one errors
-                        # Potential fix:
-                        # orientation_shape[0] - h['x'] - 1
-                        # and for 'Y':
-                        # orientation_shape[1] - h['y'] - 1
                         X.append(
                             orientation_shape[0] - h['x']
                         )
