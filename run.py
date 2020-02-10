@@ -3,7 +3,7 @@ import os
 import os.path as op
 from skimage import draw
 import numpy as np
-import nibabel as nb
+import nibabel as nib
 import logging
 from collections import OrderedDict
 import flywheel
@@ -138,7 +138,7 @@ if __name__ == '__main__':
         acquisition = fw.get(file_input['hierarchy']['id'])
         file_obj = acquisition.get_file(file_input['location']['name'])
 
-        nii = nb.load(context.get_input_path('Input_File'))
+        nii = nib.load(context.get_input_path('Input_File'))
 
         # dictionary for labels, index, R, G, B, A
         labels = OrderedDict()
@@ -169,30 +169,24 @@ if __name__ == '__main__':
                 label2data(label, nii.shape[:3], file_obj.info)
 
         """
-        TODO:
-         Here is what I don't know: Does the OHIF viewer display the nifti with
-         or without the affine matrix?  If without, then the following is
-         appropriate. If with, no... We may need to find another way to
-         make sure the coordiates are displayed in the right orientation.
-
-         As long as the orientation matrix is not permuting the axes, we
-         should be fine. Permuted or reflected(negatively valued).
-
-         However, we need to find a case where this is so... and see how
-         we can accomodate.
+        Note:
+	    The OHIF viewer displays the nifti with the affine matrix.
+	    But when it saves the click positions it uses that matrix
+	    to convert the coordinates into voxel space.  So the
+	    following is appropriate.
         """
         if len(labels) > 1:
-            all_labels_nii = nb.Nifti1Pair(data.astype(float), nii.affine)
+            all_labels_nii = nib.Nifti1Pair(data.astype(float), nii.affine)
             fl_name = 'all_labels' + '_' + file_input['location']['name']
-            nb.save(all_labels_nii, op.join(context.output_dir, fl_name))
+            nib.save(all_labels_nii, op.join(context.output_dir, fl_name))
         if len(labels) > 0:
             for label in labels:
                 indx = labels[label]['index']
-                label_nii = nb.Nifti1Pair(
+                label_nii = nib.Nifti1Pair(
                     np.bitwise_and(data, indx).astype(float),
                     nii.affine
                 )
-                nb.save(
+                nib.save(
                     label_nii,
                     op.join(
                         context.output_dir,
