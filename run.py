@@ -150,14 +150,14 @@ if __name__ == '__main__':
             for roi in file_obj.info['roi']:
                 if (roi['toolType'] == 'freehand') and \
                         (roi['label'] not in labels.keys()):
-                    # Only if annotation type is a polygon, then grab the 
+                    # Only if annotation type is a polygon, then grab the
                     # label, create a 2^x index for bitmasking, grab the color
                     # hash (e.g. #fbbc05), and translate it into RGB
                     labels[roi['label']] = {
                         'index': int(2**(len(labels))),
                         'color': roi['color'],
                         'RGB': [
-                            int(roi['color'][i: i+2], 16)
+                            int(roi['color'][i: i + 2], 16)
                             for i in [1, 3, 5]
                         ]
                     }
@@ -170,10 +170,10 @@ if __name__ == '__main__':
 
         """
         Note:
-	    The OHIF viewer displays the nifti with the affine matrix.
-	    But when it saves the click positions it uses that matrix
-	    to convert the coordinates into voxel space.  So the
-	    following is appropriate.
+        The OHIF viewer displays the nifti with the affine matrix.
+        But when it saves the click positions it uses that matrix
+        to convert the coordinates into voxel space.  So the
+        following is appropriate.
         """
         if len(labels) > 1:
             all_labels_nii = nib.Nifti1Pair(data.astype(float), nii.affine)
