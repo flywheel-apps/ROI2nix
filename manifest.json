@@ -4,16 +4,16 @@
   "description": "This gear converts ROIs created in Flywheel's OHIF viewer to NIfTI files.",
   "author": "Flywheel",
   "maintainer": "Flywheel <support@flywheel.io>",
-  "license": "Other",
+  "license": "MIT",
   "url": "",
   "source": "https://github.com/flywheel-apps/ROI2nix",
   "cite": "",
-  "version": "0.0.1-dev",
+  "version": "0.0.2-dev-g",
   "custom": {
-    "docker-image": "flywheel/roi2nix:0.0.1-dev",
+    "docker-image": "flywheel/roi2nix:0.0.2-dev-g",
     "gear-builder": {
-      "category": "converter",
-      "image": "flywheel/roi2nix:0.0.1-dev"
+      "category": "analysis",
+      "image": "flywheel/roi2nix:0.0.2-dev-g"
     }
   },
   "inputs": {
@@ -22,7 +22,7 @@
     },
     "Input_File": {
       "base": "file",
-      "description": "File with OHIF ROI ",
+      "description": "File with OHIF ROI.",
       "optional": false,
       "type": {
         "enum": [
@@ -32,6 +32,21 @@
     }
   },
   "config": {
+    "binary_masks": {
+        "default": true,
+        "description": "Outputs single ROI files with binary masks instead of bitmask value.",
+        "type": "boolean"
+      },
+      "combine_output": {
+        "default": false,
+        "description": "Output ROIs into one combined file. Values are bitmasked.",
+        "type": "boolean"
+      },
+      "slicer_color_table": {
+        "default": false,
+        "description": "Outputs the 3D Slicer Color Table (.ctbl) for all ROIs with Labels.",
+        "type": "boolean"
+      }
   },
   "command": "/flywheel/v0/run.py"
 }
