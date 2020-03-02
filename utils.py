@@ -249,23 +249,24 @@ def write_3D_Slicer_CTBL(context, file_input, labels):
         file_input (flywheel.models.file.File): Input file with metadata
         labels (OrderedDict): Ordered dictionary of ROI label attributes
     """
-    ctbl = open(
-        op.join(
-            context.output_dir,
-            'ROI_ALL_labels_' +
-            file_input['location']['name'][:-7] +
-            '.ctbl'
-        ),
-        'w'
-    )
-    for label in labels:
-        ctbl.write(
-            '{} '.format(labels[label]["index"]) +
-            '{} '.format(label) +
-            '{} '.format(labels[label]["RGB"][0]) +
-            '{} '.format(labels[label]["RGB"][1]) +
-            '{} '.format(labels[label]["RGB"][2]) +
-            '255\n'
+    if len(labels) > 0:
+        ctbl = open(
+            op.join(
+                context.output_dir,
+                'ROI_ALL_labels_' +
+                file_input['location']['name'][:-7] +
+                '.ctbl'
+            ),
+            'w'
         )
+        for label in labels:
+            ctbl.write(
+                '{} '.format(labels[label]["index"]) +
+                '{} '.format(label) +
+                '{} '.format(labels[label]["RGB"][0]) +
+                '{} '.format(labels[label]["RGB"][1]) +
+                '{} '.format(labels[label]["RGB"][2]) +
+                '255\n'
+            )
 
-    ctbl.close()
+        ctbl.close()

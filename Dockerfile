@@ -28,8 +28,7 @@ ENV \
     LD_LIBRARY_PATH=$LD_LIBRARY_PATH 
 
 # Copy executable/manifest to Gear
-COPY run.py ${FLYWHEEL}/run.py
-COPY manifest.json ${FLYWHEEL}/manifest.json
+COPY run.py utils.py manifest.json ${FLYWHEEL}/
 RUN chmod a+x /flywheel/v0/run.py
 
 # ENV preservation for Flywheel Engine

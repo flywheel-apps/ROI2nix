@@ -7,7 +7,7 @@ import numpy as np
 import flywheel
 
 from utils import poly2mask, label2data, gather_ROI_info, save_single_ROIs, \
-    save_bitmasked_ROIs, output_ROI_data, write_3D_Slicer_CTBL
+    save_bitmasked_ROIs, output_ROI_info, write_3D_Slicer_CTBL
 
 log = logging.getLogger(__name__)
 
@@ -20,16 +20,17 @@ def main(context):
         # Get configuration, acquisition, and file info
         file_input = context.get_input('Input_File')
         acquisition = fw.get(file_input['hierarchy']['id'])
+        file_obj = acquisition.get_file(file_input['location']['name'])
 
         nii = nib.load(context.get_input_path('Input_File'))
 
-        labels = gather_ROI_info(file_input)
+        labels = gather_ROI_info(file_obj)
 
         # Acquire ROI data
         data = np.zeros(nii.shape[:3], dtype=np.int8)
         for label in labels:
             data += labels[label]['index'] * \
-                label2data(label, nii.shape[:3], file_input.info)
+                label2data(label, nii.shape[:3], file_obj.info)
 
         # Output individual ROIs
         save_single_ROIs(

@@ -8,12 +8,12 @@
   "url": "",
   "source": "https://github.com/flywheel-apps/ROI2nix",
   "cite": "",
-  "version": "0.0.2-dev-g",
+  "version": "0.0.2-dev-i",
   "custom": {
-    "docker-image": "flywheel/roi2nix:0.0.2-dev-g",
+    "docker-image": "flywheel/roi2nix:0.0.2-dev-i",
     "gear-builder": {
       "category": "analysis",
-      "image": "flywheel/roi2nix:0.0.2-dev-g"
+      "image": "flywheel/roi2nix:0.0.2-dev-i"
     }
   },
   "inputs": {
