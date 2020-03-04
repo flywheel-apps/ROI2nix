@@ -48,7 +48,30 @@ def label2data(label, shape, info):
     Args:
         label (string): The label to convert the polygon data into nifti data
         shape (list): The shape of the nifti data (e.g. [256,256,256])
-        info (dict): The `info` object of the flywheel file object
+        info (dict): The `info` dictionary object of the flywheel file object
+            Example:
+            .. code-block:: python
+
+                info = {
+                    "AccessionNumber": "MN080001475",
+                    "roi": [
+                        {
+                            "color": "#ea4335",
+                            "toolType" == "freehand"
+                            "handles": [
+                                {
+                                    "y": 44.50589746553241,
+                                    "x": 70.64751958224542,
+                                    ...
+                                },
+                                {...},
+                                ...
+                            ]
+                        },
+                        {...}
+                    ],
+                    ....
+                }
 
     Returns:
         numpy.array: A numpy array of `shape` with values `True` where `label`
@@ -60,14 +83,20 @@ def label2data(label, shape, info):
         if roi["label"] == label:
             # Find orientation [Axial, Sagital, Coronal]
             img_path = roi["imagePath"]
-            # orientation character gives us a direction perpendicular
+            # orientation character gives us the direction perpendicular to the
+            # plane of the ROI
             orientation_char = img_path[img_path.find('#') + 1]
 
+            # orientation_coordinate gives us the coordinate along the axis 
+            # perpendicular to plane of the ROI
             orientation_coordinate = int(img_path[
                 img_path.find('#') + 3:
                 img_path.find(',')
             ])
-
+            # Set the orientation axis and orientation slice at a coordinate that
+            # is perpendicular to that axis. The orientation_slice accesses the
+            # data object at specified coordinates "by reference". Any changes
+            # made to the slice will be made to the data object.
             if orientation_char == 'z':
                 orientation_axis = [0, 0, 1]
                 orientation_slice = data[:, :, orientation_coordinate]
@@ -83,7 +112,10 @@ def label2data(label, shape, info):
                 orientation_slice = [0, 0, 0]
 
             # initialize x,y-coordinate lists
+            # shp_indx gives us the indices that will be used (x, y, or z) for
+            # an array slice co-planar with the ROI
             shp_indx = [i for i, x in enumerate(orientation_axis) if x == 0]
+            # orientation_shape gives us the shape of that 3D array slice
             orientation_shape = [shape[shp_indx[0]], shape[shp_indx[1]]]
 
             # Initialize x,y coordinates for each polygonal point
@@ -100,10 +132,12 @@ def label2data(label, shape, info):
                     Y.append(
                         orientation_shape[1] - h['y']
                     )
+            # We loop back to the original point to form a closed polygon
             X.append(X[0])
             Y.append(Y[0])
 
-            # If this slice already has data, we need to have the logical or
+            # If this slice already has data (i.e. this label was used in an ROI
+            # perpendicular to the current slice) we need to have the logical or
             # of that data and the new data
             orientation_slice[:, :] = np.logical_or(
                 poly2mask(X, Y, orientation_shape),
@@ -153,6 +187,25 @@ def gather_ROI_info(file_obj):
     return labels
 
 
+def calculate_ROI_volume(labels, data):
+    """
+    calculate_ROI_volume calculates the number of voxels and volume in each of
+        the ROIs
+
+    Args:
+        labels (OrderedDict): The dictionary containing ROI info
+        data (numpy.ndarray): The NIfTI data with ROI within
+    """
+    if len(labels) > 0:
+        for label, label_dict in labels.items():
+            indx = label_dict['index']
+            label_data = np.bitwise_and(data, indx)
+            voxels = np.sum(label_data > 0)
+            label_dict['voxels'] = voxels
+            volume = voxels * np.abs(np.linalg.det(affine[:3, :3]))
+            label_dict['volume'] = volume  # mm^3
+
+
 def save_single_ROIs(context, file_input, labels, data, affine, binary):
     """
     Output_Single_ROIs saves single ROIs to their own file. If `binary` is
@@ -170,15 +223,16 @@ def save_single_ROIs(context, file_input, labels, data, affine, binary):
     if len(labels) > 0:
         for label in labels:
             indx = labels[label]['index']
+            # If binary all values are 0/1 and type is int8.
+            # otherwise, accept the designated value and max integer size
             if binary:
                 modifier = indx
+                int_type = np.int8
             else:
                 modifier = 1
+                int_type = np.int64
             export_data = np.bitwise_and(data, indx).astype(np.int8) / modifier
-            voxels = np.sum(export_data > 0)
-            labels[label]['voxels'] = voxels
-            volume = voxels * np.linalg.det(affine[:3, :3])
-            labels[label]['volume'] = volume  # mm^3
+
             label_nii = nib.Nifti1Pair(
                 export_data,
                 affine
@@ -206,8 +260,15 @@ def save_bitmasked_ROIs(context, labels, file_input, data, affine):
         affine (numpy.ndarray): The nifti affine
     """
 
+    if len(labels) > 63:
+        log.warning(
+            "Due to the maximum integer length (64 bits), we can " +
+            "only keep track of a maximum of 63 ROIs with a bitmasked " +
+            "combination. You have %i ROIs.", len(labels)
+        )
+
     if len(labels) > 1:
-        all_labels_nii = nib.Nifti1Pair(data.astype(np.int8), affine)
+        all_labels_nii = nib.Nifti1Pair(data.astype(np.int64), affine)
         fl_name = 'ROI_ALL_' + file_input['location']['name']
         nib.save(all_labels_nii, op.join(context.output_dir, fl_name))
     else:
