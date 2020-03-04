@@ -21,6 +21,7 @@ def main(context):
         # Get configuration, acquisition, and file info
         file_input = context.get_input('Input_File')
         acquisition = fw.get(file_input['hierarchy']['id'])
+        # Need updated file information.
         file_obj = acquisition.get_file(file_input['location']['name'])
 
         nii = nib.load(context.get_input_path('Input_File'))
