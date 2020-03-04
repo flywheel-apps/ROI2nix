@@ -187,7 +187,7 @@ def gather_ROI_info(file_obj):
     return labels
 
 
-def calculate_ROI_volume(labels, data):
+def calculate_ROI_volume(labels, data, affine):
     """
     calculate_ROI_volume calculates the number of voxels and volume in each of
         the ROIs

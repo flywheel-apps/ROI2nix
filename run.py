@@ -48,7 +48,7 @@ def main(context):
         )
 
         # Calculate the voxel and volume of each ROI by label
-        calculate_ROI_volume(labels, data)
+        calculate_ROI_volume(labels, data, nii.affine)
 
         # Output csv file with ROI index, label, num of voxels, and ROI volume
         output_ROI_info(context, labels)

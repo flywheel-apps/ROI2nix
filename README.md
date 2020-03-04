@@ -4,7 +4,7 @@ Converts ROIs created in the Flwwheel OHIF viewer to NIfTI files.
 
 ## Usage Notes
 
-The gear will process the ROIs from a source image into a NIfTI file. If no ROIs are present, the gear will notify and exit without producing any output.
+The gear will process the ROIs from a source image into a NIfTI file. If no ROIs are present, the gear will notify and exit without producing any output. Current maximum number of distinct ROI labels is 63.
 
 Default output is all single ROIs as binary masks and a comma-separated-value (csv) file with
 
