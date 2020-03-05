@@ -1,3 +1,9 @@
+"""
+ This module represents functionality used by the `run.py` script for readability
+ and encapsulation.  References to `prior art` are given where appropriate. 
+ Areas for future implementation are noted for ease of prospective implementation.
+"""
+
 import os.path as op
 from skimage import draw
 import numpy as np
@@ -87,7 +93,7 @@ def label2data(label, shape, info):
             # plane of the ROI
             orientation_char = img_path[img_path.find('#') + 1]
 
-            # orientation_coordinate gives us the coordinate along the axis 
+            # orientation_coordinate gives us the coordinate along the axis
             # perpendicular to plane of the ROI
             orientation_coordinate = int(img_path[
                 img_path.find('#') + 3:
