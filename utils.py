@@ -166,7 +166,7 @@ def gather_ROI_info(file_obj):
     # only doing this for toolType=freehand
     # TODO: Consider other closed regions:
     # rectangleRoi, ellipticalRoi
-    if 'roi' in file_obj.info.keys():
+    if 'roi' in file_obj.info.keys() and len(labels) <63:
         for roi in file_obj.info['roi']:
             if (roi['toolType'] == 'freehand') and \
                     (roi['label'] not in labels.keys()):
@@ -181,6 +181,12 @@ def gather_ROI_info(file_obj):
                         for i in [1, 3, 5]
                     ]
                 }
+    elif len(labels) >= 63:
+        log.warning(
+            "Due to the maximum integer length (64 bits), we can " +
+            "only keep track of a maximum of 63 ROIs with a bitmasked " +
+            "combination. You have %i ROIs.", len(labels)
+        )
     else:
         log.warning('No ROIs were found for this image.')
 
