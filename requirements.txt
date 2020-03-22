@@ -1,0 +1,3 @@
+flywheel-sdk==11.0.1
+nibabel==3.0.1
+scikit-image==0.15.0
