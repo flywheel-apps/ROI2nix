@@ -34,17 +34,17 @@
     "config": {
         "save_binary_masks": {
             "default": true,
-            "description": "Outputs single ROI files with binary masks instead of bitmask value.",
+            "description": " Saves individually labeled ROIs as binary masks. Otherwise use bitmasked values (sums of powers of two). Default is True.",
             "type": "boolean"
         },
         "save_combined_output": {
             "default": false,
-            "description": "Output ROIs into one combined file. Values are bitmasked.",
+            "description": "Saves all ROIs in a single bitmasked file. If less than 2 ROIs exists, then this has no effect. Default is False.",
             "type": "boolean"
         },
         "save_slicer_color_table": {
             "default": false,
-            "description": "Outputs the 3D Slicer Color Table (.ctbl) for all ROIs with Labels.",
+            "description": "Saves a 3D Slicer colortable file for 3D Slicer integration. Default is False.",
             "type": "boolean"
         }
     },
