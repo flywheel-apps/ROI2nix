@@ -17,8 +17,7 @@ log = logging.getLogger(__name__)
 
 def poly2mask(vertex_row_coords, vertex_col_coords, shape):
     """
-    poly2mask takes polygon vertex coordinates and turns them into a filled
-        polygon
+    poly2mask converts polygon vertex coordinates into a filled polygon
 
     Origin of this code was in a scikit-image issue:
         https://github.com/scikit-image/scikit-image/issues/1103#issuecomment-52378754
