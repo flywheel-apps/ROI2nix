@@ -1,52 +1,52 @@
 {
-  "name": "roi2nix",
-  "label": "ROI to NIfTI",
-  "description": "This gear converts ROIs created in Flywheel's OHIF viewer to NIfTI files.",
-  "author": "Flywheel",
-  "maintainer": "Flywheel <support@flywheel.io>",
-  "license": "MIT",
-  "url": "",
-  "source": "https://github.com/flywheel-apps/ROI2nix",
-  "cite": "",
-  "version": "0.1.0",
-  "custom": {
-    "docker-image": "flywheel/roi2nix:0.1.0",
-    "gear-builder": {
-      "category": "analysis",
-      "image": "flywheel/roi2nix:0.1.0"
-    }
-  },
-  "inputs": {
-    "api-key": {
-        "base": "api-key"
+    "name": "roi2nix",
+    "label": "ROI to NIfTI",
+    "description": "This gear converts ROIs created in Flywheel's OHIF viewer to NIfTI files.",
+    "author": "Flywheel",
+    "maintainer": "Flywheel <support@flywheel.io>",
+    "license": "MIT",
+    "url": "",
+    "source": "https://github.com/flywheel-apps/ROI2nix",
+    "cite": "",
+    "version": "0.1.0",
+    "custom": {
+        "docker-image": "flywheel/roi2nix:0.1.0",
+        "gear-builder": {
+            "category": "analysis",
+            "image": "flywheel/roi2nix:0.1.0"
+        }
     },
-    "Input_File": {
-      "base": "file",
-      "description": "File with OHIF ROI.",
-      "optional": false,
-      "type": {
-        "enum": [
-          "nifti"
-        ]
-      }
-    }
-  },
-  "config": {
-    "binary_masks": {
-        "default": true,
-        "description": "Outputs single ROI files with binary masks instead of bitmask value.",
-        "type": "boolean"
-      },
-      "combine_output": {
-        "default": false,
-        "description": "Output ROIs into one combined file. Values are bitmasked.",
-        "type": "boolean"
-      },
-      "slicer_color_table": {
-        "default": false,
-        "description": "Outputs the 3D Slicer Color Table (.ctbl) for all ROIs with Labels.",
-        "type": "boolean"
-      }
-  },
-  "command": "/flywheel/v0/run.py"
+    "inputs": {
+        "api-key": {
+            "base": "api-key"
+        },
+        "Input_File": {
+            "base": "file",
+            "description": "NIfTI file with ROI drawn in OHIF Viewer (Required).",
+            "optional": false,
+            "type": {
+                "enum": [
+                    "nifti"
+                ]
+            }
+        }
+    },
+    "config": {
+        "save_binary_masks": {
+            "default": true,
+            "description": "Outputs single ROI files with binary masks instead of bitmask value.",
+            "type": "boolean"
+        },
+        "save_combined_output": {
+            "default": false,
+            "description": "Output ROIs into one combined file. Values are bitmasked.",
+            "type": "boolean"
+        },
+        "save_slicer_color_table": {
+            "default": false,
+            "description": "Outputs the 3D Slicer Color Table (.ctbl) for all ROIs with Labels.",
+            "type": "boolean"
+        }
+    },
+    "command": "/flywheel/v0/run.py"
 }

@@ -1,15 +1,16 @@
 """
  This module represents functionality used by the `run.py` script for readability
- and encapsulation.  References to `prior art` are given where appropriate. 
+ and encapsulation.  References to `prior art` are given where appropriate.
  Areas for future implementation are noted for ease of prospective implementation.
 """
 
-import os.path as op
-from skimage import draw
-import numpy as np
-import nibabel as nib
 import logging
+import os.path as op
 from collections import OrderedDict
+
+import nibabel as nib
+import numpy as np
+from skimage import draw
 
 log = logging.getLogger(__name__)
 
@@ -172,7 +173,7 @@ def gather_ROI_info(file_obj):
     # only doing this for toolType=freehand
     # TODO: Consider other closed regions:
     # rectangleRoi, ellipticalRoi
-    if 'roi' in file_obj.info.keys() and len(labels) <63:
+    if 'roi' in file_obj.info.keys() and len(labels) < 63:
         for roi in file_obj.info['roi']:
             if (roi['toolType'] == 'freehand') and \
                     (roi['label'] not in labels.keys()):
@@ -189,8 +190,8 @@ def gather_ROI_info(file_obj):
                 }
     elif len(labels) >= 63:
         log.warning(
-            "Due to the maximum integer length (64 bits), we can " +
-            "only keep track of a maximum of 63 ROIs with a bitmasked " +
+            "Due to the maximum integer length (64 bits), we can "
+            "only keep track of a maximum of 63 ROIs with a bitmasked "
             "combination. You have %i ROIs.", len(labels)
         )
     else:
@@ -209,7 +210,7 @@ def calculate_ROI_volume(labels, data, affine):
         data (numpy.ndarray): The NIfTI data with ROI within
     """
     if len(labels) > 0:
-        for label, label_dict in labels.items():
+        for _, label_dict in labels.items():
             indx = label_dict['index']
             label_data = np.bitwise_and(data, indx)
             voxels = np.sum(label_data > 0)
@@ -243,7 +244,10 @@ def save_single_ROIs(context, file_input, labels, data, affine, binary):
             else:
                 modifier = 1
                 int_type = np.int64
-            export_data = np.bitwise_and(data, indx).astype(np.int8) / modifier
+            export_data = np.bitwise_and(
+                data,
+                indx
+            ).astype(int_type) / modifier
 
             label_nii = nib.Nifti1Pair(
                 export_data,
@@ -274,8 +278,8 @@ def save_bitmasked_ROIs(context, labels, file_input, data, affine):
 
     if len(labels) > 63:
         log.warning(
-            "Due to the maximum integer length (64 bits), we can " +
-            "only keep track of a maximum of 63 ROIs with a bitmasked " +
+            "Due to the maximum integer length (64 bits), we can "
+            "only keep track of a maximum of 63 ROIs with a bitmasked "
             "combination. You have %i ROIs.", len(labels)
         )
 

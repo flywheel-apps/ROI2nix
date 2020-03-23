@@ -1,14 +1,20 @@
 #!/usr/bin/env python3
-import os
 import logging
+import os
+
+import flywheel
 import nibabel as nib
 import numpy as np
 
-import flywheel
-
-from utils import poly2mask, label2data, gather_ROI_info, save_single_ROIs,\
-    calculate_ROI_volume, save_bitmasked_ROIs, output_ROI_info,\
+from utils import (
+    calculate_ROI_volume,
+    gather_ROI_info,
+    label2data,
+    output_ROI_info,
+    save_bitmasked_ROIs,
+    save_single_ROIs,
     write_3D_Slicer_CTBL
+)
 
 log = logging.getLogger(__name__)
 
@@ -44,7 +50,7 @@ def main(context):
             labels,
             data,
             nii.affine,
-            config['binary_masks']
+            config['save_binary_masks']
         )
 
         # Calculate the voxel and volume of each ROI by label
@@ -56,11 +62,11 @@ def main(context):
         # Output all ROIs in one file, if selected
         # TODO: If we want different output styles (last written, 4D Nifti)
         # we would implement that here...with a combo box in the manifest.
-        if config['combine_output']:
+        if config['save_combine_output']:
             save_bitmasked_ROIs(context, labels, file_input, data, nii.affine)
 
         # Write Slicer color table file .cbtl
-        if config['slicer_color_table']:
+        if config['save_slicer_color_table']:
             write_3D_Slicer_CTBL(context, file_input, labels)
 
     except Exception as e:
