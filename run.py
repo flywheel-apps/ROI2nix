@@ -62,7 +62,7 @@ def main(context):
         # Output all ROIs in one file, if selected
         # TODO: If we want different output styles (last written, 4D Nifti)
         # we would implement that here...with a combo box in the manifest.
-        if config['save_combine_output']:
+        if config['save_combined_output']:
             save_bitmasked_ROIs(context, labels, file_input, data, nii.affine)
 
         # Write Slicer color table file .cbtl
