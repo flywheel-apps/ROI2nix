@@ -252,11 +252,17 @@ def save_single_ROIs(context, file_input, labels, data, affine, binary):
                 export_data,
                 affine
             )
+            filename = 'ROI_' + label + '_' + file_input['location']['name']
+            # If the original file_input was an uncompressed NIfTI
+            # ensure compression
+            if filename[-3:] == "nii":
+                filename += ".gz"
+
             nib.save(
                 label_nii,
                 op.join(
                     context.output_dir,
-                    'ROI_' + label + '_' + file_input['location']['name']
+                    filename
                 )
             )
     else:
@@ -284,8 +290,14 @@ def save_bitmasked_ROIs(context, labels, file_input, data, affine):
 
     if len(labels) > 1:
         all_labels_nii = nib.Nifti1Pair(data.astype(np.int64), affine)
-        fl_name = 'ROI_ALL_' + file_input['location']['name']
-        nib.save(all_labels_nii, op.join(context.output_dir, fl_name))
+        filename = 'ROI_ALL_' + file_input['location']['name']
+
+        # If the original file_input was an uncompressed NIfTI
+        # ensure compression
+        if filename[-3:] == "nii":
+            filename += ".gz"
+
+        nib.save(all_labels_nii, op.join(context.output_dir, filename))
     else:
         log.warning("There are not enough ROIs to save an aggregate.")
 
