@@ -269,7 +269,8 @@ def save_single_ROIs(context, file_input, labels, data, affine, binary):
         log.warning('No ROIs were found for this image.')
 
 
-def save_bitmasked_ROIs(context, labels, file_input, data, affine):
+def save_bitmasked_ROIs(context, labels, file_input, data, affine,
+                        combined_output_size):
     """
     save_bitmasked_ROIs saves all ROIs rendered into a bitmasked NIfTI file.
 
@@ -279,17 +280,31 @@ def save_bitmasked_ROIs(context, labels, file_input, data, affine):
         file_input (flywheel.models.file.File): Input File object
         data (numpy.ndarray): The nifti data object
         affine (numpy.ndarray): The nifti affine
+        combined_output_size (string): numpy integer size
     """
 
-    if len(labels) > 63:
+    if combined_output_size == 'int8':
+        bits = 7
+        np_type = np.int8
+    elif combined_output_size == 'int16':
+        bits = 15
+        np_type = np.int16
+    elif combined_output_size == 'int32':
+        bits = 31
+        np_type = np.int32
+    elif combined_output_size == 'int64':
+        bits = 63
+        np_type = np.int64
+
+    if len(labels) > bits:
         log.warning(
-            "Due to the maximum integer length (64 bits), we can "
-            "only keep track of a maximum of 63 ROIs with a bitmasked "
-            "combination. You have %i ROIs.", len(labels)
+            "Due to the maximum integer length (%i bits), we can "
+            "only keep track of a maximum of %i ROIs with a bitmasked "
+            "combination. You have %i ROIs.", bits+1, bits, len(labels)
         )
 
     if len(labels) > 1:
-        all_labels_nii = nib.Nifti1Pair(data.astype(np.int64), affine)
+        all_labels_nii = nib.Nifti1Pair(data.astype(np_type), affine)
         filename = 'ROI_ALL_' + file_input['location']['name']
 
         # If the original file_input was an uncompressed NIfTI
