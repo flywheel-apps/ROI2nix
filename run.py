@@ -37,9 +37,16 @@ def main(context):
         # at a time.
         labels = gather_ROI_info(file_obj)
 
+        len_labels = len(labels)
+        if len_labels > 0:
+            context.log.info("Found %s ROI labels", len_labels)
+        else:
+            context.log.error("Found NO ROI labels")
+
         # Acquire ROI data
         data = np.zeros(nii.shape[:3], dtype=np.int64)
         for label in labels:
+            context.log.info("Getting ROI \"%s\"", label)
             data += labels[label]['index'] * \
                 label2data(label, nii.shape[:3], file_obj.info)
 
