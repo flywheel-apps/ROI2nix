@@ -42,6 +42,78 @@ def poly2mask(vertex_row_coords, vertex_col_coords, shape):
     return mask
 
 
+def get_points(data, img_path, roi_points, shape):
+    """Convert x,y point data into 3D masks.
+
+    Args:
+        data (3D np array) the result
+        roi_image_path (string) provides orientation and slice info
+        roi_points (dict) the part of the roi dictionary that holds the point data
+    """
+
+    # Find orientation [Axial, Sagital, Coronal]
+    # orientation character gives us the direction perpendicular to the
+    # plane of the ROI
+    orientation_char = img_path[img_path.find('#') + 1]
+
+    # orientation_coordinate gives us the coordinate along the axis
+    # perpendicular to plane of the ROI
+    orientation_coordinate = int(img_path[
+        img_path.find('#') + 3:
+        img_path.find(',')
+    ])
+    # Set the orientation axis and orientation slice at a coordinate that
+    # is perpendicular to that axis. The orientation_slice accesses the
+    # data object at specified coordinates "by reference". Any changes
+    # made to the slice will be made to the data object.
+    if orientation_char == 'z':
+        orientation_axis = [0, 0, 1]
+        orientation_slice = data[:, :, orientation_coordinate]
+    elif orientation_char == 'y':
+        orientation_axis = [0, 1, 0]
+        orientation_slice = data[:, orientation_coordinate, :]
+    elif orientation_char == 'x':
+        orientation_axis = [1, 0, 0]
+        orientation_slice = data[orientation_coordinate, :, :]
+    else:
+        log.warning('Orientation character not recognized.')
+        orientation_axis = ''
+        orientation_slice = [0, 0, 0]
+
+    # initialize x,y-coordinate lists
+    # shp_indx gives us the indices that will be used (x, y, or z) for
+    # an array slice co-planar with the ROI
+    shp_indx = [i for i, x in enumerate(orientation_axis) if x == 0]
+    # orientation_shape gives us the shape of that 3D array slice
+    orientation_shape = [shape[shp_indx[0]], shape[shp_indx[1]]]
+
+    # Initialize x,y coordinates for each polygonal point
+    X = []
+    Y = []
+    if isinstance(roi_points, list):
+        for h in roi_points:
+            if orientation_char == 'x':
+                X.append(
+                    orientation_shape[0] - h['x']
+                )
+            else:
+                X.append(h['x'])
+            Y.append(
+                orientation_shape[1] - h['y']
+            )
+    # We loop back to the original point to form a closed polygon
+    X.append(X[0])
+    Y.append(Y[0])
+
+    # If this slice already has data (i.e. this label was used in an ROI
+    # perpendicular to the current slice) we need to have the logical or
+    # of that data and the new data
+    orientation_slice[:, :] = np.logical_or(
+        poly2mask(X, Y, orientation_shape),
+        orientation_slice[:, :]
+    )
+
+
 def label2data(label, shape, info):
     """
     label2data gives the roi data block for a nifti file with `shape` and
@@ -85,70 +157,20 @@ def label2data(label, shape, info):
 
     """
     data = np.zeros(shape, dtype=np.bool)
-    for roi in info['roi']:
-        if roi["label"] == label:
-            # Find orientation [Axial, Sagital, Coronal]
-            img_path = roi["imagePath"]
-            # orientation character gives us the direction perpendicular to the
-            # plane of the ROI
-            orientation_char = img_path[img_path.find('#') + 1]
 
-            # orientation_coordinate gives us the coordinate along the axis
-            # perpendicular to plane of the ROI
-            orientation_coordinate = int(img_path[
-                img_path.find('#') + 3:
-                img_path.find(',')
-            ])
-            # Set the orientation axis and orientation slice at a coordinate that
-            # is perpendicular to that axis. The orientation_slice accesses the
-            # data object at specified coordinates "by reference". Any changes
-            # made to the slice will be made to the data object.
-            if orientation_char == 'z':
-                orientation_axis = [0, 0, 1]
-                orientation_slice = data[:, :, orientation_coordinate]
-            elif orientation_char == 'y':
-                orientation_axis = [0, 1, 0]
-                orientation_slice = data[:, orientation_coordinate, :]
-            elif orientation_char == 'x':
-                orientation_axis = [1, 0, 0]
-                orientation_slice = data[orientation_coordinate, :, :]
-            else:
-                log.warning('Orientation character not recognized.')
-                orientation_axis = ''
-                orientation_slice = [0, 0, 0]
+    if "roi" in info:
+        for roi in info["roi"]:
+            if roi["label"] == label:
+                get_points(data, roi["imagePath"], roi["handles"], shape)
 
-            # initialize x,y-coordinate lists
-            # shp_indx gives us the indices that will be used (x, y, or z) for
-            # an array slice co-planar with the ROI
-            shp_indx = [i for i, x in enumerate(orientation_axis) if x == 0]
-            # orientation_shape gives us the shape of that 3D array slice
-            orientation_shape = [shape[shp_indx[0]], shape[shp_indx[1]]]
+    # for OHIF REACT viewer:
+    elif ("ohifViewer" in info and
+          "measurements" in info["ohifViewer"] and
+          "FreehandRoi" in info["ohifViewer"]["measurements"]):
 
-            # Initialize x,y coordinates for each polygonal point
-            X = []
-            Y = []
-            if isinstance(roi["handles"], list):
-                for h in roi['handles']:
-                    if orientation_char == 'x':
-                        X.append(
-                            orientation_shape[0] - h['x']
-                        )
-                    else:
-                        X.append(h['x'])
-                    Y.append(
-                        orientation_shape[1] - h['y']
-                    )
-            # We loop back to the original point to form a closed polygon
-            X.append(X[0])
-            Y.append(Y[0])
-
-            # If this slice already has data (i.e. this label was used in an ROI
-            # perpendicular to the current slice) we need to have the logical or
-            # of that data and the new data
-            orientation_slice[:, :] = np.logical_or(
-                poly2mask(X, Y, orientation_shape),
-                orientation_slice[:, :]
-            )
+        for roi in info["ohifViewer"]["measurements"]["FreehandRoi"]:
+            if roi["location"] == label:
+                get_points(data, roi["imagePath"], roi["handles"]["points"], shape)
 
     return data
 
@@ -172,7 +194,15 @@ def gather_ROI_info(file_obj):
     # only doing this for toolType=freehand
     # TODO: Consider other closed regions:
     # rectangleRoi, ellipticalRoi
-    if 'roi' in file_obj.info.keys() and len(labels) < 63:
+
+    if len(labels) > 63:
+        log.warning(
+            "Due to the maximum integer length (64 bits), we can "
+            "only keep track of a maximum of 63 ROIs with a bitmasked "
+            "combination. You have %i ROIs.", len(labels)
+        )
+
+    elif 'roi' in file_obj.info.keys():
         for roi in file_obj.info['roi']:
             if (roi['toolType'] == 'freehand') and \
                     (roi['label'] not in labels.keys()):
@@ -187,12 +217,22 @@ def gather_ROI_info(file_obj):
                         for i in [1, 3, 5]
                     ]
                 }
-    elif len(labels) >= 63:
-        log.warning(
-            "Due to the maximum integer length (64 bits), we can "
-            "only keep track of a maximum of 63 ROIs with a bitmasked "
-            "combination. You have %i ROIs.", len(labels)
-        )
+
+    elif ('ohifViewer' in file_obj.info.keys() and
+          'measurements' in file_obj.info["ohifViewer"]):
+
+        if 'FreehandRoi' in file_obj.info["ohifViewer"]['measurements']:
+            for roi in file_obj.info["ohifViewer"]['measurements']['FreehandRoi']:
+                labels[roi['location']] = {
+                    'index': int(2**(len(labels))),
+                    # Colors are not yet defined so just use this
+                    'color': 'fbbc05',
+                    'RGB': [
+                        int('fbbc05'[i: i + 2], 16)
+                        for i in [1, 3, 5]
+                    ]
+                }
+
     else:
         log.warning('No ROIs were found for this image.')
 
