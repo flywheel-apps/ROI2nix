@@ -33,51 +33,53 @@ def poly2mask(vertex_row_coords, vertex_col_coords, shape):
             for within the polygon, False for outside the polygon
     """
     fill_row_coords, fill_col_coords = draw.polygon(
-        vertex_row_coords,
-        vertex_col_coords,
-        shape
+        vertex_row_coords, vertex_col_coords, shape
     )
     mask = np.zeros(shape, dtype=np.bool)
     mask[fill_row_coords, fill_col_coords] = True
     return mask
 
 
-def get_points(data, img_path, roi_points, shape):
+def get_points(data, img_path, roi_points, reactOHIF=True):
+
     """Convert x,y point data into 3D masks.
 
     Args:
-        data (3D np array) the result
-        roi_image_path (string) provides orientation and slice info
-        roi_points (dict) the part of the roi dictionary that holds the point data
+        data (3D np array): The result
+        roi_image_path (string): Provides orientation and slice info
+        roi_points (dict): The part of the roi dictionary that holds the point data
+        reactOHIF (bool, optional): Use React or Legacy Viewer. Defaults to True.
     """
 
     # Find orientation [Axial, Sagital, Coronal]
     # orientation character gives us the direction perpendicular to the
     # plane of the ROI
-    orientation_char = img_path[img_path.find('#') + 1]
+    orientation_char = img_path[img_path.find("#") + 1]
 
+    shape = data.shape
     # orientation_coordinate gives us the coordinate along the axis
     # perpendicular to plane of the ROI
-    orientation_coordinate = int(img_path[
-        img_path.find('#') + 3:
-        img_path.find(',')
-    ])
+    orientation_coordinate = int(img_path[img_path.find("#") + 3 : img_path.find(",")])
     # Set the orientation axis and orientation slice at a coordinate that
     # is perpendicular to that axis. The orientation_slice accesses the
     # data object at specified coordinates "by reference". Any changes
     # made to the slice will be made to the data object.
-    if orientation_char == 'z':
+    if orientation_char == "z":
         orientation_axis = [0, 0, 1]
+        if reactOHIF:
+            orientation_coordinate = shape[2] - orientation_coordinate - 1
         orientation_slice = data[:, :, orientation_coordinate]
-    elif orientation_char == 'y':
+    elif orientation_char == "y":
         orientation_axis = [0, 1, 0]
+        if reactOHIF:
+            orientation_coordinate = shape[2] - orientation_coordinate - 1
         orientation_slice = data[:, orientation_coordinate, :]
-    elif orientation_char == 'x':
+    elif orientation_char == "x":
         orientation_axis = [1, 0, 0]
         orientation_slice = data[orientation_coordinate, :, :]
     else:
-        log.warning('Orientation character not recognized.')
-        orientation_axis = ''
+        log.warning("Orientation character not recognized.")
+        orientation_axis = ""
         orientation_slice = [0, 0, 0]
 
     # initialize x,y-coordinate lists
@@ -92,15 +94,11 @@ def get_points(data, img_path, roi_points, shape):
     Y = []
     if isinstance(roi_points, list):
         for h in roi_points:
-            if orientation_char == 'x':
-                X.append(
-                    orientation_shape[0] - h['x']
-                )
+            if orientation_char == "x":
+                X.append(orientation_shape[0] - h["x"])
             else:
-                X.append(h['x'])
-            Y.append(
-                orientation_shape[1] - h['y']
-            )
+                X.append(h["x"])
+            Y.append(orientation_shape[1] - h["y"])
     # We loop back to the original point to form a closed polygon
     X.append(X[0])
     Y.append(Y[0])
@@ -109,8 +107,7 @@ def get_points(data, img_path, roi_points, shape):
     # perpendicular to the current slice) we need to have the logical or
     # of that data and the new data
     orientation_slice[:, :] = np.logical_or(
-        poly2mask(X, Y, orientation_shape),
-        orientation_slice[:, :]
+        poly2mask(X, Y, orientation_shape), orientation_slice[:, :]
     )
 
 
@@ -161,16 +158,18 @@ def label2data(label, shape, info):
     if "roi" in info:
         for roi in info["roi"]:
             if roi["label"] == label:
-                get_points(data, roi["imagePath"], roi["handles"], shape)
+                get_points(data, roi["imagePath"], roi["handles"], reactOHIF=False)
 
     # for OHIF REACT viewer:
-    elif ("ohifViewer" in info and
-          "measurements" in info["ohifViewer"] and
-          "FreehandRoi" in info["ohifViewer"]["measurements"]):
+    elif (
+        "ohifViewer" in info
+        and "measurements" in info["ohifViewer"]
+        and "FreehandRoi" in info["ohifViewer"]["measurements"]
+    ):
 
         for roi in info["ohifViewer"]["measurements"]["FreehandRoi"]:
             if roi["location"] == label:
-                get_points(data, roi["imagePath"], roi["handles"]["points"], shape)
+                get_points(data, roi["imagePath"], roi["handles"]["points"])
 
     return data
 
@@ -199,42 +198,39 @@ def gather_ROI_info(file_obj):
         log.warning(
             "Due to the maximum integer length (64 bits), we can "
             "only keep track of a maximum of 63 ROIs with a bitmasked "
-            "combination. You have %i ROIs.", len(labels)
+            "combination. You have %i ROIs.",
+            len(labels),
         )
 
-    elif 'roi' in file_obj.info.keys():
-        for roi in file_obj.info['roi']:
-            if (roi['toolType'] == 'freehand') and \
-                    (roi['label'] not in labels.keys()):
+    elif "roi" in file_obj.info.keys():
+        for roi in file_obj.info["roi"]:
+            if (roi["toolType"] == "freehand") and (roi["label"] not in labels.keys()):
                 # Only if annotation type is a polygon, then grab the
                 # label, create a 2^x index for bitmasking, grab the color
                 # hash (e.g. #fbbc05), and translate it into RGB
-                labels[roi['label']] = {
-                    'index': int(2**(len(labels))),
-                    'color': roi['color'],
-                    'RGB': [
-                        int(roi['color'][i: i + 2], 16)
-                        for i in [1, 3, 5]
-                    ]
+                labels[roi["label"]] = {
+                    "index": int(2 ** (len(labels))),
+                    "color": roi["color"],
+                    "RGB": [int(roi["color"][i : i + 2], 16) for i in [1, 3, 5]],
                 }
 
-    elif ('ohifViewer' in file_obj.info.keys() and
-          'measurements' in file_obj.info["ohifViewer"]):
+    elif (
+        "ohifViewer" in file_obj.info.keys()
+        and "measurements" in file_obj.info["ohifViewer"]
+    ):
 
-        if 'FreehandRoi' in file_obj.info["ohifViewer"]['measurements']:
-            for roi in file_obj.info["ohifViewer"]['measurements']['FreehandRoi']:
-                labels[roi['location']] = {
-                    'index': int(2**(len(labels))),
-                    # Colors are not yet defined so just use this
-                    'color': 'fbbc05',
-                    'RGB': [
-                        int('fbbc05'[i: i + 2], 16)
-                        for i in [1, 3, 5]
-                    ]
-                }
+        if "FreehandRoi" in file_obj.info["ohifViewer"]["measurements"]:
+            for roi in file_obj.info["ohifViewer"]["measurements"]["FreehandRoi"]:
+                if roi["location"] not in labels.keys():
+                    labels[roi["location"]] = {
+                        "index": int(2 ** (len(labels))),
+                        # Colors are not yet defined so just use this
+                        "color": "fbbc05",
+                        "RGB": [int("fbbc05"[i : i + 2], 16) for i in [1, 3, 5]],
+                    }
 
     else:
-        log.warning('No ROIs were found for this image.')
+        log.warning("No ROIs were found for this image.")
 
     return labels
 
@@ -250,12 +246,12 @@ def calculate_ROI_volume(labels, data, affine):
     """
     if len(labels) > 0:
         for _, label_dict in labels.items():
-            indx = label_dict['index']
+            indx = label_dict["index"]
             label_data = np.bitwise_and(data, indx)
             voxels = np.sum(label_data > 0)
-            label_dict['voxels'] = voxels
+            label_dict["voxels"] = voxels
             volume = voxels * np.abs(np.linalg.det(affine[:3, :3]))
-            label_dict['volume'] = volume  # mm^3
+            label_dict["volume"] = volume  # mm^3
 
 
 def save_single_ROIs(context, file_input, labels, data, affine, binary):
@@ -274,7 +270,7 @@ def save_single_ROIs(context, file_input, labels, data, affine, binary):
 
     if len(labels) > 0:
         for label in labels:
-            indx = labels[label]['index']
+            indx = labels[label]["index"]
             # If binary all values are 0/1 and type is int8.
             # otherwise, accept the designated value and max integer size
             if binary:
@@ -283,34 +279,23 @@ def save_single_ROIs(context, file_input, labels, data, affine, binary):
             else:
                 modifier = 1
                 int_type = np.int64
-            export_data = np.bitwise_and(
-                data,
-                indx
-            ).astype(int_type) / modifier
+            export_data = np.bitwise_and(data, indx).astype(int_type) / modifier
 
-            label_nii = nib.Nifti1Pair(
-                export_data,
-                affine
-            )
-            filename = 'ROI_' + label + '_' + file_input['location']['name']
+            label_nii = nib.Nifti1Pair(export_data, affine)
+            filename = "ROI_" + label + "_" + file_input["location"]["name"]
             # If the original file_input was an uncompressed NIfTI
             # ensure compression
             if filename[-3:] == "nii":
                 filename += ".gz"
 
-            nib.save(
-                label_nii,
-                op.join(
-                    context.output_dir,
-                    filename
-                )
-            )
+            nib.save(label_nii, op.join(context.output_dir, filename))
     else:
-        log.warning('No ROIs were found for this image.')
+        log.warning("No ROIs were found for this image.")
 
 
-def save_bitmasked_ROIs(context, labels, file_input, data, affine,
-                        combined_output_size):
+def save_bitmasked_ROIs(
+    context, labels, file_input, data, affine, combined_output_size
+):
     """
     save_bitmasked_ROIs saves all ROIs rendered into a bitmasked NIfTI file.
 
@@ -323,16 +308,16 @@ def save_bitmasked_ROIs(context, labels, file_input, data, affine,
         combined_output_size (string): numpy integer size
     """
 
-    if combined_output_size == 'int8':
+    if combined_output_size == "int8":
         bits = 7
         np_type = np.int8
-    elif combined_output_size == 'int16':
+    elif combined_output_size == "int16":
         bits = 15
         np_type = np.int16
-    elif combined_output_size == 'int32':
+    elif combined_output_size == "int32":
         bits = 31
         np_type = np.int32
-    elif combined_output_size == 'int64':
+    elif combined_output_size == "int64":
         bits = 63
         np_type = np.int64
 
@@ -340,12 +325,15 @@ def save_bitmasked_ROIs(context, labels, file_input, data, affine,
         log.warning(
             "Due to the maximum integer length (%i bits), we can "
             "only keep track of a maximum of %i ROIs with a bitmasked "
-            "combination. You have %i ROIs.", bits+1, bits, len(labels)
+            "combination. You have %i ROIs.",
+            bits + 1,
+            bits,
+            len(labels),
         )
 
     if len(labels) > 1:
         all_labels_nii = nib.Nifti1Pair(data.astype(np_type), affine)
-        filename = 'ROI_ALL_' + file_input['location']['name']
+        filename = "ROI_ALL_" + file_input["location"]["name"]
 
         # If the original file_input was an uncompressed NIfTI
         # ensure compression
@@ -372,10 +360,8 @@ def output_ROI_info(context, labels):
             index = labels[label]["index"]
             voxels = labels[label]["voxels"]
             volume = labels[label]["volume"]
-            lines.append(
-                '{},{},{},{}\n'.format(label, index, voxels, volume)
-            )
-        csv_file = open(op.join(context.output_dir, 'ROI_info.csv'), 'w')
+            lines.append("{},{},{},{}\n".format(label, index, voxels, volume))
+        csv_file = open(op.join(context.output_dir, "ROI_info.csv"), "w")
         csv_file.writelines(lines)
         csv_file.close()
     else:
@@ -396,20 +382,18 @@ def write_3D_Slicer_CTBL(context, file_input, labels):
         ctbl = open(
             op.join(
                 context.output_dir,
-                'ROI_ALL_labels_' +
-                file_input['location']['name'][:-7] +
-                '.ctbl'
+                "ROI_ALL_labels_" + file_input["location"]["name"][:-7] + ".ctbl",
             ),
-            'w'
+            "w",
         )
         for label in labels:
             ctbl.write(
-                '{} '.format(labels[label]["index"]) +
-                '{} '.format(label) +
-                '{} '.format(labels[label]["RGB"][0]) +
-                '{} '.format(labels[label]["RGB"][1]) +
-                '{} '.format(labels[label]["RGB"][2]) +
-                '255\n'
+                "{} ".format(labels[label]["index"])
+                + "{} ".format(label)
+                + "{} ".format(labels[label]["RGB"][0])
+                + "{} ".format(labels[label]["RGB"][1])
+                + "{} ".format(labels[label]["RGB"][2])
+                + "255\n"
             )
 
         ctbl.close()
