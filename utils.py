@@ -46,9 +46,10 @@ def get_points(data, img_path, roi_points, reactOHIF=True):
 
     Args:
         data (3D np array): The result
-        roi_image_path (string): Provides orientation and slice info
+        image_path (string): Provides orientation and slice info
         roi_points (dict): The part of the roi dictionary that holds the point data
-        reactOHIF (bool, optional): Use React or Legacy Viewer. Defaults to True.
+        reactOHIF (bool, optional): Use React(True) or Legacy Viewer(False).
+            Defaults to True.
     """
 
     # Find orientation [Axial, Sagital, Coronal]
@@ -194,15 +195,7 @@ def gather_ROI_info(file_obj):
     # TODO: Consider other closed regions:
     # rectangleRoi, ellipticalRoi
 
-    if len(labels) > 63:
-        log.warning(
-            "Due to the maximum integer length (64 bits), we can "
-            "only keep track of a maximum of 63 ROIs with a bitmasked "
-            "combination. You have %i ROIs.",
-            len(labels),
-        )
-
-    elif "roi" in file_obj.info.keys():
+    if "roi" in file_obj.info.keys():
         for roi in file_obj.info["roi"]:
             if (roi["toolType"] == "freehand") and (roi["label"] not in labels.keys()):
                 # Only if annotation type is a polygon, then grab the
@@ -231,6 +224,14 @@ def gather_ROI_info(file_obj):
 
     else:
         log.warning("No ROIs were found for this image.")
+
+    if len(labels) > 63:
+        log.warning(
+            "Due to the maximum integer length (64 bits), we can "
+            "only keep track of a maximum of 63 ROIs with a bitmasked "
+            "combination. You have %i ROIs.",
+            len(labels),
+        )
 
     return labels
 
