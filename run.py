@@ -26,11 +26,21 @@ def main(context):
     try:
         # Get configuration, acquisition, and file info
         file_input = context.get_input("Input_File")
-        acquisition = fw.get(file_input["hierarchy"]["id"])
+        # acquisition = fw.get(file_input["hierarchy"]["id"])
         # Need updated file information.
-        file_obj = acquisition.get_file(file_input["location"]["name"])
+        file_obj = file_input["object"]
+        # file_obj = acquisition.get_file(file_input["location"]["name"])
 
         nii = nib.load(context.get_input_path("Input_File"))
+
+        inv_reduced_aff = np.linalg.inv(
+            np.round(
+                np.matmul(
+                    nii.affine[:3, :3],
+                    np.diag(1.0 / np.linalg.norm(nii.affine[:3, :3], axis=0)),
+                )
+            )
+        )
 
         # Collate label, color, and index information into a dictionary keyed
         # by the name of each "label". Enables us to iterate through one "label"
@@ -48,7 +58,7 @@ def main(context):
         for label in labels:
             context.log.info('Getting ROI "%s"', label)
             data += labels[label]["index"] * label2data(
-                label, nii.shape[:3], file_obj.info
+                label, nii.shape[:3], file_obj["info"], inv_reduced_aff
             )
 
         # Output individual ROIs
@@ -97,10 +107,21 @@ if __name__ == "__main__":
     )
     logging.basicConfig(level=log_level, format=fmt, datefmt="%H:%M:%S")
     log.info("Log level is {}".format(log_level))
-    with flywheel.GearContext() as gear_context:
-        gear_context.log = log
-        gear_context.log_config()
-        exit_status = main(gear_context)
+    tsts = [
+        # "/Users/joshuajacobs/Projects/2020.01.29.ROI2nii/Data/roi2nix-0.2.1_012",
+        # "/Users/joshuajacobs/Projects/2020.01.29.ROI2nii/Data/roi2nix-0.2.1_021",
+        # "/Users/joshuajacobs/Projects/2020.01.29.ROI2nii/Data/roi2nix-0.2.1_102",
+        # "/Users/joshuajacobs/Projects/2020.01.29.ROI2nii/Data/roi2nix-0.2.1_120",
+        # "/Users/joshuajacobs/Projects/2020.01.29.ROI2nii/Data/roi2nix-0.2.1_201",
+        # "/Users/joshuajacobs/Projects/2020.01.29.ROI2nii/Data/roi2nix-0.2.1_210",
+        "/Users/joshuajacobs/Projects/2020.01.29.ROI2nii/Data/roi2nix-0.2.1_-210",
+    ]
+    for tst in tsts:
+        print(tst)
+        with flywheel.GearContext(tst) as gear_context:
+            gear_context.log = log
+            gear_context.log_config()
+            exit_status = main(gear_context)
 
     log.info("exit_status is %s", exit_status)
     os.sys.exit(exit_status)
