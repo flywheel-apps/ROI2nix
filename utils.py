@@ -57,7 +57,6 @@ def get_points(data, img_path, roi_points, inv_reduced_aff, reactOHIF=True):
     # orientation character gives us the direction perpendicular to the
     # plane of the ROI
     orientation_char = img_path[img_path.find("#") + 1]
-    reduced_aff = np.linalg.inv(inv_reduced_aff)
     shape = data.shape
     # orientation_coordinate gives us the coordinate along the axis
     # perpendicular to plane of the ROI
@@ -75,8 +74,8 @@ def get_points(data, img_path, roi_points, inv_reduced_aff, reactOHIF=True):
         x_indx = x_axis.nonzero()[0][0]
         y_indx = y_axis.nonzero()[0][0]
 
-        x_flip = False  # invert_orientation_coordinate("x", inv_reduced_aff)
-        y_flip = True  # invert_orientation_coordinate("y", inv_reduced_aff)
+        x_flip = False
+        y_flip = True
 
     elif orientation_char == "y":
         orientation_axis = np.matmul(inv_reduced_aff, [0, 1, 0])
@@ -90,8 +89,8 @@ def get_points(data, img_path, roi_points, inv_reduced_aff, reactOHIF=True):
         x_indx = x_axis.nonzero()[0][0]
         y_indx = y_axis.nonzero()[0][0]
 
-        x_flip = False  # invert_orientation_coordinate("x", inv_reduced_aff)
-        y_flip = True  # invert_orientation_coordinate("y", inv_reduced_aff)
+        x_flip = False
+        y_flip = True
 
     elif orientation_char == "x":
         orientation_axis = np.matmul(inv_reduced_aff, [1, 0, 0])
@@ -105,8 +104,8 @@ def get_points(data, img_path, roi_points, inv_reduced_aff, reactOHIF=True):
         x_indx = x_axis.nonzero()[0][0]
         y_indx = y_axis.nonzero()[0][0]
 
-        x_flip = True  # invert_orientation_coordinate("x", inv_reduced_aff)
-        y_flip = True  # invert_orientation_coordinate("y", inv_reduced_aff)
+        x_flip = True
+        y_flip = True
 
     else:
         log.warning("Orientation character not recognized.")
@@ -150,6 +149,7 @@ def get_points(data, img_path, roi_points, inv_reduced_aff, reactOHIF=True):
     X.append(X[0])
     Y.append(Y[0])
 
+    # If these coordinates need to be swapped
     if x_indx > y_indx:
         Z = X
         X = Y
