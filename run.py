@@ -107,21 +107,11 @@ if __name__ == "__main__":
     )
     logging.basicConfig(level=log_level, format=fmt, datefmt="%H:%M:%S")
     log.info("Log level is {}".format(log_level))
-    tsts = [
-        # "/Users/joshuajacobs/Projects/2020.01.29.ROI2nii/Data/roi2nix-0.2.1_012",
-        # "/Users/joshuajacobs/Projects/2020.01.29.ROI2nii/Data/roi2nix-0.2.1_021",
-        # "/Users/joshuajacobs/Projects/2020.01.29.ROI2nii/Data/roi2nix-0.2.1_102",
-        # "/Users/joshuajacobs/Projects/2020.01.29.ROI2nii/Data/roi2nix-0.2.1_120",
-        # "/Users/joshuajacobs/Projects/2020.01.29.ROI2nii/Data/roi2nix-0.2.1_201",
-        # "/Users/joshuajacobs/Projects/2020.01.29.ROI2nii/Data/roi2nix-0.2.1_210",
-        "/Users/joshuajacobs/Projects/2020.01.29.ROI2nii/Data/roi2nix-0.2.1_-210",
-    ]
-    for tst in tsts:
-        print(tst)
-        with flywheel.GearContext(tst) as gear_context:
-            gear_context.log = log
-            gear_context.log_config()
-            exit_status = main(gear_context)
+
+    with flywheel.GearContext() as gear_context:
+        gear_context.log = log
+        gear_context.log_config()
+        exit_status = main(gear_context)
 
     log.info("exit_status is %s", exit_status)
     os.sys.exit(exit_status)
