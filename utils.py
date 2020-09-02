@@ -41,18 +41,6 @@ def poly2mask(vertex_row_coords, vertex_col_coords, shape):
     return mask
 
 
-def invert_orientation_coordinate(orientation_char, inv_reduced_aff):
-    if orientation_char in ["y", "z"]:
-        if np.abs(inv_reduced_aff[0, 0]) == 1:
-            return True
-        elif (np.abs(inv_reduced_aff[2, 0]) == 1) and (
-            np.abs(inv_reduced_aff[0, 1]) == 1
-        ):
-            return True
-
-    return False
-
-
 def get_points(data, img_path, roi_points, inv_reduced_aff, reactOHIF=True):
     """
     Convert x,y point data into 3D masks.
@@ -74,18 +62,6 @@ def get_points(data, img_path, roi_points, inv_reduced_aff, reactOHIF=True):
     # orientation_coordinate gives us the coordinate along the axis
     # perpendicular to plane of the ROI
     orientation_coordinate = int(img_path[img_path.find("#") + 3 : img_path.find(",")])
-    # Set the orientation axis and orientation slice at a coordinate that
-    # is perpendicular to that axis. The orientation_slice accesses the
-    # data object at specified coordinates "by reference". Any changes
-    # made to the slice will be made to the data object.
-
-    # inv_coord = invert_orientation_coordinate(orientation_char, inv_reduced_aff)
-
-    # orientation_coordinate = (
-    #     shape[2] - orientation_coordinate - 1
-    #     if (reactOHIF and inv_coord)
-    #     else orientation_coordinate
-    # )
 
     if orientation_char == "z":
         orientation_axis = np.matmul(inv_reduced_aff, [0, 0, 1])
