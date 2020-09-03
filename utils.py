@@ -74,8 +74,9 @@ def get_points(data, img_path, roi_points, inv_reduced_aff, reactOHIF=True):
         x_indx = x_axis.nonzero()[0][0]
         y_indx = y_axis.nonzero()[0][0]
 
-        x_flip = False
-        y_flip = True
+        # The "flip" of each axis is related to the sign of its axis coordinate
+        x_flip = np.dot(x_axis, np.abs(x_axis)) < 0
+        y_flip = np.dot(y_axis, np.abs(y_axis)) > 0
 
     elif orientation_char == "y":
         orientation_axis = np.matmul(inv_reduced_aff, [0, 1, 0])
@@ -89,8 +90,9 @@ def get_points(data, img_path, roi_points, inv_reduced_aff, reactOHIF=True):
         x_indx = x_axis.nonzero()[0][0]
         y_indx = y_axis.nonzero()[0][0]
 
-        x_flip = False
-        y_flip = True
+        # The "flip" of each axis is related to the sign of its axis coordinate
+        x_flip = np.dot(x_axis, np.abs(x_axis)) < 0
+        y_flip = np.dot(y_axis, np.abs(y_axis)) > 0
 
     elif orientation_char == "x":
         orientation_axis = np.matmul(inv_reduced_aff, [1, 0, 0])
@@ -104,8 +106,9 @@ def get_points(data, img_path, roi_points, inv_reduced_aff, reactOHIF=True):
         x_indx = x_axis.nonzero()[0][0]
         y_indx = y_axis.nonzero()[0][0]
 
-        x_flip = True
-        y_flip = True
+        # The "flip" of each axis is related to the sign of its axis coordinate
+        x_flip = np.dot(x_axis, np.abs(x_axis)) > 0
+        y_flip = np.dot(y_axis, np.abs(y_axis)) > 0
 
     else:
         log.warning("Orientation character not recognized.")
