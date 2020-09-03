@@ -47,13 +47,13 @@ def get_points(data, img_path, roi_points, inv_reduced_aff, reactOHIF=True):
 
     Args:
         data (3D np array): The result
-        image_path (string): Provides orientation and slice info
+        img_path (string): Provides orientation and slice info
         roi_points (dict): The part of the roi dictionary that holds the point data
         inv_reduced_aff (numpy.Array): Standard unit basis inverse of nifti affine.
         reactOHIF (bool, optional): Use React(True) or Legacy Viewer(False).
             Defaults to True.
     """
-    # Find orientation [Axial, Sagital, Coronal]
+    # Find orientation [Axial, Sagittal, Coronal]
     # orientation character gives us the direction perpendicular to the
     # plane of the ROI
     orientation_char = img_path[img_path.find("#") + 1]
