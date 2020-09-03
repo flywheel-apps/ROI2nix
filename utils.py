@@ -6,6 +6,7 @@
 
 import logging
 import os.path as op
+import re
 from collections import OrderedDict
 
 import nibabel as nib
@@ -40,48 +41,91 @@ def poly2mask(vertex_row_coords, vertex_col_coords, shape):
     return mask
 
 
-def get_points(data, img_path, roi_points, reactOHIF=True):
-
-    """Convert x,y point data into 3D masks.
+def get_points(data, img_path, roi_points, inv_reduced_aff, reactOHIF=True):
+    """
+    Convert x,y point data into 3D masks.
 
     Args:
         data (3D np array): The result
-        image_path (string): Provides orientation and slice info
+        img_path (string): Provides orientation and slice info
         roi_points (dict): The part of the roi dictionary that holds the point data
+        inv_reduced_aff (numpy.Array): Standard unit basis inverse of nifti affine.
         reactOHIF (bool, optional): Use React(True) or Legacy Viewer(False).
             Defaults to True.
     """
-
-    # Find orientation [Axial, Sagital, Coronal]
+    # Find orientation [Axial, Sagittal, Coronal]
     # orientation character gives us the direction perpendicular to the
     # plane of the ROI
     orientation_char = img_path[img_path.find("#") + 1]
-
     shape = data.shape
     # orientation_coordinate gives us the coordinate along the axis
     # perpendicular to plane of the ROI
     orientation_coordinate = int(img_path[img_path.find("#") + 3 : img_path.find(",")])
-    # Set the orientation axis and orientation slice at a coordinate that
-    # is perpendicular to that axis. The orientation_slice accesses the
-    # data object at specified coordinates "by reference". Any changes
-    # made to the slice will be made to the data object.
+
     if orientation_char == "z":
-        orientation_axis = [0, 0, 1]
-        if reactOHIF:
+        orientation_axis = np.matmul(inv_reduced_aff, [0, 0, 1])
+        # If we have a positive direction on this axis, switch direction
+        if np.dot(orientation_axis, np.abs(orientation_axis)) > 0:
             orientation_coordinate = shape[2] - orientation_coordinate - 1
-        orientation_slice = data[:, :, orientation_coordinate]
+
+        x_axis = np.matmul(inv_reduced_aff, [1, 0, 0])
+        y_axis = np.matmul(inv_reduced_aff, [0, 1, 0])
+
+        x_indx = x_axis.nonzero()[0][0]
+        y_indx = y_axis.nonzero()[0][0]
+
+        # The "flip" of each axis is related to the sign of its axis coordinate
+        x_flip = np.dot(x_axis, np.abs(x_axis)) < 0
+        y_flip = np.dot(y_axis, np.abs(y_axis)) > 0
+
     elif orientation_char == "y":
-        orientation_axis = [0, 1, 0]
-        if reactOHIF:
-            orientation_coordinate = shape[2] - orientation_coordinate - 1
-        orientation_slice = data[:, orientation_coordinate, :]
+        orientation_axis = np.matmul(inv_reduced_aff, [0, 1, 0])
+        # If we have a positive direction on this axis, switch direction
+        if np.dot(orientation_axis, np.abs(orientation_axis)) > 0:
+            orientation_coordinate = shape[1] - orientation_coordinate - 1
+
+        x_axis = np.matmul(inv_reduced_aff, [1, 0, 0])
+        y_axis = np.matmul(inv_reduced_aff, [0, 0, 1])
+
+        x_indx = x_axis.nonzero()[0][0]
+        y_indx = y_axis.nonzero()[0][0]
+
+        # The "flip" of each axis is related to the sign of its axis coordinate
+        x_flip = np.dot(x_axis, np.abs(x_axis)) < 0
+        y_flip = np.dot(y_axis, np.abs(y_axis)) > 0
+
     elif orientation_char == "x":
-        orientation_axis = [1, 0, 0]
-        orientation_slice = data[orientation_coordinate, :, :]
+        orientation_axis = np.matmul(inv_reduced_aff, [1, 0, 0])
+        # If we have a negative direction on this axis, switch direction
+        if np.dot(orientation_axis, np.abs(orientation_axis)) < 0:
+            orientation_coordinate = shape[0] - orientation_coordinate - 1
+
+        x_axis = np.matmul(inv_reduced_aff, [0, 1, 0])
+        y_axis = np.matmul(inv_reduced_aff, [0, 0, 1])
+
+        x_indx = x_axis.nonzero()[0][0]
+        y_indx = y_axis.nonzero()[0][0]
+
+        # The "flip" of each axis is related to the sign of its axis coordinate
+        x_flip = np.dot(x_axis, np.abs(x_axis)) > 0
+        y_flip = np.dot(y_axis, np.abs(y_axis)) > 0
+
     else:
         log.warning("Orientation character not recognized.")
         orientation_axis = ""
         orientation_slice = [0, 0, 0]
+
+    if all(np.abs(orientation_axis) == [1, 0, 0]):
+        orientation_slice = data[orientation_coordinate, :, :]
+
+    elif all(np.abs(orientation_axis) == [0, 1, 0]):
+        orientation_slice = data[:, orientation_coordinate, :]
+
+    elif all(np.abs(orientation_axis) == [0, 0, 1]):
+        orientation_slice = data[:, :, orientation_coordinate]
+
+    else:
+        log.warning("Orientation Axis not found.")
 
     # initialize x,y-coordinate lists
     # shp_indx gives us the indices that will be used (x, y, or z) for
@@ -95,14 +139,24 @@ def get_points(data, img_path, roi_points, reactOHIF=True):
     Y = []
     if isinstance(roi_points, list):
         for h in roi_points:
-            if orientation_char == "x":
-                X.append(orientation_shape[0] - h["x"])
+            if x_flip:  # orientation_char == "x":
+                X.append(shape[x_indx] - h["x"] - 1)
             else:
                 X.append(h["x"])
-            Y.append(orientation_shape[1] - h["y"])
+            if y_flip:
+                Y.append(shape[y_indx] - h["y"] - 1)
+            else:
+                Y.append(h["y"])
+
     # We loop back to the original point to form a closed polygon
     X.append(X[0])
     Y.append(Y[0])
+
+    # If these coordinates need to be swapped
+    if x_indx > y_indx:
+        Z = X
+        X = Y
+        Y = Z
 
     # If this slice already has data (i.e. this label was used in an ROI
     # perpendicular to the current slice) we need to have the logical or
@@ -112,7 +166,7 @@ def get_points(data, img_path, roi_points, reactOHIF=True):
     )
 
 
-def label2data(label, shape, info):
+def label2data(label, shape, info, inv_reduced_aff):
     """
     label2data gives the roi data block for a nifti file with `shape` and
     `info`
@@ -122,9 +176,10 @@ def label2data(label, shape, info):
     not yet do ellipses or rectangles.
 
     Args:
-        label (string): The label to convert the polygon data into nifti data
-        shape (list): The shape of the nifti data (e.g. [256,256,256])
-        info (dict): The `info` dictionary object of the flywheel file object
+        label (string): The label to convert the polygon data into nifti data.
+        shape (list): The shape of the nifti data (e.g. [256,256,256]).
+        info (dict): The `info` dictionary object of the flywheel file object.
+        inv_reduced_aff (numpy.Array): Standard unit basis inverse of nifti affine.
             Example:
             .. code-block:: python
 
@@ -159,7 +214,13 @@ def label2data(label, shape, info):
     if "roi" in info:
         for roi in info["roi"]:
             if roi["label"] == label:
-                get_points(data, roi["imagePath"], roi["handles"], reactOHIF=False)
+                get_points(
+                    data,
+                    roi["imagePath"],
+                    roi["handles"],
+                    inv_reduced_aff,
+                    reactOHIF=False,
+                )
 
     # for OHIF REACT viewer:
     elif (
@@ -170,7 +231,9 @@ def label2data(label, shape, info):
 
         for roi in info["ohifViewer"]["measurements"]["FreehandRoi"]:
             if roi["location"] == label:
-                get_points(data, roi["imagePath"], roi["handles"]["points"])
+                get_points(
+                    data, roi["imagePath"], roi["handles"]["points"], inv_reduced_aff
+                )
 
     return data
 
@@ -195,8 +258,8 @@ def gather_ROI_info(file_obj):
     # TODO: Consider other closed regions:
     # rectangleRoi, ellipticalRoi
 
-    if "roi" in file_obj.info.keys():
-        for roi in file_obj.info["roi"]:
+    if "roi" in file_obj["info"].keys():
+        for roi in file_obj["info"]["roi"]:
             if (roi["toolType"] == "freehand") and (roi["label"] not in labels.keys()):
                 # Only if annotation type is a polygon, then grab the
                 # label, create a 2^x index for bitmasking, grab the color
@@ -208,12 +271,12 @@ def gather_ROI_info(file_obj):
                 }
 
     elif (
-        "ohifViewer" in file_obj.info.keys()
-        and "measurements" in file_obj.info["ohifViewer"]
+        "ohifViewer" in file_obj["info"].keys()
+        and "measurements" in file_obj["info"]["ohifViewer"]
     ):
 
-        if "FreehandRoi" in file_obj.info["ohifViewer"]["measurements"]:
-            for roi in file_obj.info["ohifViewer"]["measurements"]["FreehandRoi"]:
+        if "FreehandRoi" in file_obj["info"]["ohifViewer"]["measurements"]:
+            for roi in file_obj["info"]["ohifViewer"]["measurements"]["FreehandRoi"]:
                 if roi["location"] not in labels.keys():
                     labels[roi["location"]] = {
                         "index": int(2 ** (len(labels))),
@@ -283,7 +346,8 @@ def save_single_ROIs(context, file_input, labels, data, affine, binary):
             export_data = np.bitwise_and(data, indx).astype(int_type) / modifier
 
             label_nii = nib.Nifti1Pair(export_data, affine)
-            filename = "ROI_" + label + "_" + file_input["location"]["name"]
+            label_out = re.sub("[^0-9a-zA-Z]+", "_", label)
+            filename = "ROI_" + label_out + "_" + file_input["location"]["name"]
             # If the original file_input was an uncompressed NIfTI
             # ensure compression
             if filename[-3:] == "nii":
