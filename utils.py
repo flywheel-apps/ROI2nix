@@ -140,11 +140,11 @@ def get_points(data, img_path, roi_points, inv_reduced_aff, reactOHIF=True):
     if isinstance(roi_points, list):
         for h in roi_points:
             if x_flip:  # orientation_char == "x":
-                X.append(shape[x_indx] - h["x"] - 1)
+                X.append(shape[x_indx] - h["x"])
             else:
                 X.append(h["x"])
             if y_flip:
-                Y.append(shape[y_indx] - h["y"] - 1)
+                Y.append(shape[y_indx] - h["y"])
             else:
                 Y.append(h["y"])
 
