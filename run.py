@@ -30,6 +30,8 @@ def main(context):
 
         nii = nib.load(context.get_input_path("Input_File"))
 
+        # Create an inverse of the matrix that is the closest projection onto the
+        # basis unit vectors of the coordinate system of the original affine.
         inv_reduced_aff = np.linalg.inv(
             np.round(
                 np.matmul(
