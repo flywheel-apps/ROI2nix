@@ -230,7 +230,7 @@ def label2data(label, shape, info, inv_reduced_aff):
     ):
 
         for roi in info["ohifViewer"]["measurements"]["FreehandRoi"]:
-            if roi["location"] == label:
+            if roi.get("location") and roi["location"] == label:
                 get_points(
                     data, roi["imagePath"], roi["handles"]["points"], inv_reduced_aff
                 )
@@ -260,7 +260,11 @@ def gather_ROI_info(file_obj):
 
     if "roi" in file_obj["info"].keys():
         for roi in file_obj["info"]["roi"]:
-            if (roi["toolType"] == "freehand") and (roi["label"] not in labels.keys()):
+            if (
+                roi.get("label")
+                and (roi["toolType"] == "freehand")
+                and (roi["label"] not in labels.keys())
+            ):
                 # Only if annotation type is a polygon, then grab the
                 # label, create a 2^x index for bitmasking, grab the color
                 # hash (e.g. #fbbc05), and translate it into RGB
@@ -277,13 +281,19 @@ def gather_ROI_info(file_obj):
 
         if "FreehandRoi" in file_obj["info"]["ohifViewer"]["measurements"]:
             for roi in file_obj["info"]["ohifViewer"]["measurements"]["FreehandRoi"]:
-                if roi["location"] not in labels.keys():
-                    labels[roi["location"]] = {
-                        "index": int(2 ** (len(labels))),
-                        # Colors are not yet defined so just use this
-                        "color": "fbbc05",
-                        "RGB": [int("fbbc05"[i : i + 2], 16) for i in [1, 3, 5]],
-                    }
+                if roi.get("location"):
+                    if roi["location"] not in labels.keys():
+                        labels[roi["location"]] = {
+                            "index": int(2 ** (len(labels))),
+                            # Colors are not yet defined so just use this
+                            "color": "fbbc05",
+                            "RGB": [int("fbbc05"[i : i + 2], 16) for i in [1, 3, 5]],
+                        }
+                else:
+                    log.warning(
+                        "There is an ROI without a label. To include this ROI in the "
+                        "output, please attach a label."
+                    )
 
     else:
         log.warning("No ROIs were found for this image.")
