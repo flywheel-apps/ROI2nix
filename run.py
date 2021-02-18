@@ -5,6 +5,7 @@ import os
 import flywheel
 import nibabel as nib
 import numpy as np
+from flywheel_gear_toolkit import GearToolkitContext
 
 from utils import (
     calculate_ROI_volume,
@@ -98,18 +99,12 @@ def main(context):
 
 
 if __name__ == "__main__":
-    # Activate custom logger
-    log_level = logging.INFO
-    fmt = (
-        "%(asctime)s.%(msecs)03d %(levelname)-8s "
-        + "[%(name)s %(funcName)s()]: %(message)s"
+    tst_dir = (
+        "/Users/joshuajacobs/Projects/2020.01.29.ROI2nii/"
+        "Data/roi2nix-0.1.1_rc01_602d9317e09ee31b523e3859"
     )
-    logging.basicConfig(level=log_level, format=fmt, datefmt="%H:%M:%S")
-    log.info("Log level is {}".format(log_level))
-
-    with flywheel.GearContext() as gear_context:
-        gear_context.log = log
-        gear_context.log_config()
+    with GearToolkitContext(tst_dir) as gear_context:
+        gear_context.init_logging()
         exit_status = main(gear_context)
 
     log.info("exit_status is %s", exit_status)
