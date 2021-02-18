@@ -349,17 +349,6 @@ def label2data(label, shape, info, inv_reduced_aff):
     """
     data = np.zeros(shape, dtype=np.bool)
 
-    if "roi" in info:
-        for roi in info["roi"]:
-            if roi["label"] == label:
-                fill_roi_slice(
-                    data,
-                    roi["imagePath"],
-                    roi["handles"],
-                    inv_reduced_aff,
-                    reactOHIF=False,
-                )
-
     # for OHIF REACT viewer:
     if (
         "ohifViewer" in info
@@ -381,7 +370,19 @@ def label2data(label, shape, info, inv_reduced_aff):
                             inv_reduced_aff,
                             roi_type=roi_type,
                         )
-
+    # deprioritize any OHIF Meteor annotations...
+    # ROI2Nix will not do both
+    # TODO: Deprecate OHIF Meteor functionality
+    elif "roi" in info:
+        for roi in info["roi"]:
+            if roi["label"] == label:
+                fill_roi_slice(
+                    data,
+                    roi["imagePath"],
+                    roi["handles"],
+                    inv_reduced_aff,
+                    reactOHIF=False,
+                )
     return data
 
 
@@ -401,23 +402,6 @@ def gather_ROI_info(file_obj):
     # dictionary for labels, index, R, G, B, A
     labels = OrderedDict()
 
-    # only doing this for toolType=freehand for Meteor (legacy) OHIF Viewer
-
-    if "roi" in file_obj["info"].keys():
-        for roi in file_obj["info"]["roi"]:
-            if (
-                roi.get("label")
-                and (roi["toolType"] == "freehand")
-                and (roi["label"] not in labels.keys())
-            ):
-                # Only if annotation type is a polygon, then grab the
-                # label, create a 2^x index for bitmasking, grab the color
-                # hash (e.g. #fbbc05), and translate it into RGB
-                labels[roi["label"]] = {
-                    "index": int(2 ** (len(labels))),
-                    "color": roi["color"],
-                    "RGB": [int(roi["color"][i : i + 2], 16) for i in [1, 3, 5]],
-                }
     # React OHIF Viewer
     if (
         "ohifViewer" in file_obj["info"].keys()
@@ -450,7 +434,25 @@ def gather_ROI_info(file_obj):
                         "There is an ROI without a label. To include this ROI in the "
                         "output, please attach a label."
                     )
-
+    # only doing this for toolType=freehand for Meteor (legacy) OHIF Viewer
+    # Deprioritizing OHIF Meteor Annotations
+    # ROI2Nix will not do both at the same time
+    # TODO: Deprecate OHIF Meteor functionality
+    elif "roi" in file_obj["info"].keys():
+        for roi in file_obj["info"]["roi"]:
+            if (
+                roi.get("label")
+                and (roi["toolType"] == "freehand")
+                and (roi["label"] not in labels.keys())
+            ):
+                # Only if annotation type is a polygon, then grab the
+                # label, create a 2^x index for bitmasking, grab the color
+                # hash (e.g. #fbbc05), and translate it into RGB
+                labels[roi["label"]] = {
+                    "index": int(2 ** (len(labels))),
+                    "color": roi["color"],
+                    "RGB": [int(roi["color"][i : i + 2], 16) for i in [1, 3, 5]],
+                }
     else:
         log.warning("No ROIs were found for this image.")
 
