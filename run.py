@@ -29,7 +29,8 @@ def main(context):
         # Need updated file information.
         file_obj = file_input["object"]
 
-        nii = nib.load(context.get_input_path("Input_File"))
+        if file_obj["type"] == "nifti":
+            nii = nib.load(context.get_input_path("Input_File"))
 
         # Create an inverse of the matrix that is the closest projection onto the
         # basis unit vectors of the coordinate system of the original affine.
@@ -99,11 +100,7 @@ def main(context):
 
 
 if __name__ == "__main__":
-    tst_dir = (
-        "/Users/joshuajacobs/Projects/2020.01.29.ROI2nii/"
-        "Data/roi2nix-0.1.1_rc01_602d9317e09ee31b523e3859"
-    )
-    with GearToolkitContext(tst_dir) as gear_context:
+    with GearToolkitContext() as gear_context:
         gear_context.init_logging()
         exit_status = main(gear_context)
 
