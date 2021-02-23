@@ -1,7 +1,7 @@
 # Dockerfile exported by GearBuilderGUI.Stash edits before export again
 
 # Inheriting from established docker image:
-FROM ubuntu:xenial
+FROM ubuntu:focal
 
 # Inheriting from established docker image:
 LABEL maintainer="Flywheel <support@flywheel.io>"
@@ -9,7 +9,8 @@ LABEL maintainer="Flywheel <support@flywheel.io>"
 # Install APT dependencies
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
-    python3-pip && \
+    python3-pip \ 
+    python3-setuptools && \
     rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
 # Make directory for flywheel spec (v0):
@@ -19,7 +20,7 @@ WORKDIR ${FLYWHEEL}
 # Install PIP Dependencies
 COPY requirements.txt ${FLYWHEEL}/requirements.txt
 RUN pip3 install --upgrade pip && \ 
-    pip install -r requirements.txt && \
+    pip3 install -r requirements.txt && \
     rm -rf /root/.cache/pip
 
 # Specify ENV Variables

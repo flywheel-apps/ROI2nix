@@ -5,6 +5,7 @@ import os
 import flywheel
 import nibabel as nib
 import numpy as np
+from flywheel_gear_toolkit import GearToolkitContext
 
 from utils import (
     calculate_ROI_volume,
@@ -28,7 +29,8 @@ def main(context):
         # Need updated file information.
         file_obj = file_input["object"]
 
-        nii = nib.load(context.get_input_path("Input_File"))
+        if file_obj["type"] == "nifti":
+            nii = nib.load(context.get_input_path("Input_File"))
 
         # Create an inverse of the matrix that is the closest projection onto the
         # basis unit vectors of the coordinate system of the original affine.
@@ -98,18 +100,8 @@ def main(context):
 
 
 if __name__ == "__main__":
-    # Activate custom logger
-    log_level = logging.INFO
-    fmt = (
-        "%(asctime)s.%(msecs)03d %(levelname)-8s "
-        + "[%(name)s %(funcName)s()]: %(message)s"
-    )
-    logging.basicConfig(level=log_level, format=fmt, datefmt="%H:%M:%S")
-    log.info("Log level is {}".format(log_level))
-
-    with flywheel.GearContext() as gear_context:
-        gear_context.log = log
-        gear_context.log_config()
+    with GearToolkitContext() as gear_context:
+        gear_context.init_logging()
         exit_status = main(gear_context)
 
     log.info("exit_status is %s", exit_status)
