@@ -181,8 +181,8 @@ def convert_dicom_to_nifti(context, input_name):
         ohifViewer_info = session.info.get("ohifViewer")
 
     if not ohifViewer_info:
-        ErrorMSG = "Session info is missing ROI data for selected DICOM file."
-        raise InvalidROIError(ErrorMSG)
+        error_message = "Session info is missing ROI data for selected DICOM file."
+        raise InvalidROIError(error_message)
 
     # need studyInstanceUid and seriesInstanceUid from DICOM series to select
     # appropriate records from the Session-level OHIF viewer annotations:
@@ -198,7 +198,7 @@ def convert_dicom_to_nifti(context, input_name):
     else:
         shutil.copy(context.get_input_path(input_name), dicom_dir)
 
-    # open one dicom file to extraact studyInstanceUid and seriesInstanceUid
+    # open one dicom file to extract studyInstanceUid and seriesInstanceUid
     dicom = None
     for root, _, files in os.walk(str(dicom_dir), topdown=False):
         for fl in files:
@@ -215,8 +215,8 @@ def convert_dicom_to_nifti(context, input_name):
         studyInstanceUid = dicom.StudyInstanceUID
         seriesInstanceUid = dicom.SeriesInstanceUID
     else:
-        ErrorMSG = "An invalid dicom file was encountered."
-        raise InvalidDICOMFile(ErrorMSG)
+        error_message = "An invalid dicom file was encountered."
+        raise InvalidDICOMFile(error_message)
 
     nifti_output = context.output_dir / "converted_dicom.nii.gz"
     # convert dicom to nifti (work/dicom.nii.gz)
@@ -224,14 +224,19 @@ def convert_dicom_to_nifti(context, input_name):
         nii_stats = dicom2nifti.dicom_series_to_nifti(dicom_dir, nifti_output)
     except Exception as e:
         log.exception(e)
-        ErrorMSG = "An invalid dicom file was encountered."
-        raise InvalidDICOMFile(ErrorMSG)
+        error_message = (
+            "An invalid dicom file was encountered. "
+            '"SeriesInstanceUID", "InstanceNumber", '
+            '"ImageOrientationPatient", or "ImagePositionPatient"'
+            " may be missing from the DICOM series."
+        )
+        raise InvalidDICOMFile(error_message)
 
     imagePath = f"{studyInstanceUid}$$${seriesInstanceUid}$$$"
     # check for imagePath in ohifViewer info
     if imagePath not in str(ohifViewer_info):
-        ErrorMSG = "Session info is missing ROI data for selected DICOM file."
-        raise InvalidROIError(ErrorMSG)
+        error_message = "Session info is missing ROI data for selected DICOM file."
+        raise InvalidROIError(error_message)
 
     file_obj, perp_char = convert_ROI_to_nifti_form(
         fw_client, project_id, file_obj, imagePath, ohifViewer_info
