@@ -2,7 +2,6 @@
 import logging
 import os
 
-import flywheel
 import nibabel as nib
 import numpy as np
 from flywheel_gear_toolkit import GearToolkitContext
@@ -37,8 +36,13 @@ def main(context):
 
         elif file_obj["type"] == "dicom":
             # convert dicom-centric data to nifti-centric data
-            nii, file_obj = convert_dicom_to_nifti(context, input_name="Input_File")
-            adjustment_matrix[:, 0] = -1 * adjustment_matrix[:, 0]
+            nii, file_obj, perp_char = convert_dicom_to_nifti(
+                context, input_name="Input_File"
+            )
+            # If the DICOM is Axial or Coronal (perp_char is "z" or "y") modify the
+            # below adjustment matrix to indicate the left/right origin of the x-axis.
+            if perp_char in ["z", "y"]:
+                adjustment_matrix[:, 0] = -1 * adjustment_matrix[:, 0]
 
         # Create an inverse of the matrix that is the closest projection onto the
         # basis unit vectors of the coordinate system of the original affine.

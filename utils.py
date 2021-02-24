@@ -133,13 +133,29 @@ def convert_ROI_to_nifti_form(
                     if roi_type not in out_ohifViewer_info["measurements"].keys():
                         out_ohifViewer_info["measurements"][roi_type] = []
 
+                    # (0020, 0037) Image Orientation Patient
+                    # Needed to determine axis perpendicular to slice
+                    ImageOrientationPatient = list(
+                        map(round, slice_instance["00200037"]["Value"])
+                    )
+                    # from https://stackoverflow.com/questions/34782409/understanding-dicom-image-attributes-to-get-axial-coronal-sagittal-cuts
+                    # https://groups.google.com/g/comp.protocols.dicom/c/GW04ODKR7Tc?pli=1
+                    if ImageOrientationPatient == [1, 0, 0, 0, 1, 0]:
+                        perp_char = "z"
+                    elif ImageOrientationPatient == [0, 1, 0, 0, 0, -1]:
+                        perp_char = "x"
+                    elif ImageOrientationPatient == [1, 0, 0, 0, 0, -1]:
+                        perp_char = "y"
+
                     # InstanceNumber is 1-indexed, niftis are 0-indexed.
-                    roi["imagePath"] = f"dicom.nii.gz#z-{InstanceNumber-1},t-0$$$0"
+                    roi[
+                        "imagePath"
+                    ] = f"dicom.nii.gz#{perp_char}-{InstanceNumber-1},t-0$$$0"
                     out_ohifViewer_info["measurements"][roi_type].append(roi)
 
     file_obj["info"].update({"ohifViewer": out_ohifViewer_info})
 
-    return file_obj
+    return file_obj, perp_char
 
 
 def convert_dicom_to_nifti(context, input_name):
@@ -186,10 +202,12 @@ def convert_dicom_to_nifti(context, input_name):
     dicom = None
     for root, _, files in os.walk(str(dicom_dir), topdown=False):
         for fl in files:
-            if ".dcm" in fl:
+            try:
                 dicom_path = Path(root) / fl
                 dicom = pydicom.read_file(dicom_path, force=True)
                 break
+            except Exception as e:
+                pass
         if dicom:
             break
 
@@ -215,12 +233,12 @@ def convert_dicom_to_nifti(context, input_name):
         ErrorMSG = "Session info is missing ROI data for selected DICOM file."
         raise InvalidROIError(ErrorMSG)
 
-    file_obj = convert_ROI_to_nifti_form(
+    file_obj, perp_char = convert_ROI_to_nifti_form(
         fw_client, project_id, file_obj, imagePath, ohifViewer_info
     )
 
     nii = nii_stats["NII"]
-    return nii, file_obj
+    return nii, file_obj, perp_char
 
 
 def poly2mask(vertex_row_coords, vertex_col_coords, shape):
@@ -256,7 +274,7 @@ def freehand2mask(roi_points, shape, axes_flips, swap_axes=False):
         roi_points (list): Points representing vertices of the freehand polygon.
         shape (tuple): The size of the two-dimensional array to fill.
         axes_flips (tuple): Indicates if the affine flips each axes, x or y.
-        swap_axes (bool, optional): If the x and y axes need to be swapped.
+        swap_axes (bool, optional): If the x and y axes need to be swaped.
             Defaults to False.
 
     Returns:
@@ -304,7 +322,7 @@ def rectangle2mask(start, end, shape, axes_flips, swap_axes=False):
         end (tuple): Lower right coordinate of bounding box
         shape (tuple): The size of the two-dimensional array to fill
         axes_flips (tuple): Indicates if the affine flips each axes, x or y.
-        swap_axes (bool, optional): If the x and y axes need to be swapped.
+        swap_axes (bool, optional): If the x and y axes need to be swaped.
             Defaults to False.
 
     Returns:
@@ -343,7 +361,7 @@ def ellipse2mask(start, end, shape, axes_flips, swap_axes=False):
         end (tuple): Lower right coordinate of bounding box
         shape (tuple): The size of the two-dimensional array to fill
         axes_flips (tuple): Indicates if the affine flips each axes, x or y.
-        swap_axes (bool, optional): If the x and y axes need to be swapped.
+        swap_axes (bool, optional): If the x and y axes need to be swaped.
             Defaults to False.
 
     Returns:
