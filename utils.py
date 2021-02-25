@@ -279,7 +279,7 @@ def freehand2mask(roi_points, shape, axes_flips, swap_axes=False):
         roi_points (list): Points representing vertices of the freehand polygon.
         shape (tuple): The size of the two-dimensional array to fill.
         axes_flips (tuple): Indicates if the affine flips each axes, x or y.
-        swap_axes (bool, optional): If the x and y axes need to be swaped.
+        swap_axes (bool, optional): If the x and y axes need to be swapped.
             Defaults to False.
 
     Returns:
@@ -327,7 +327,7 @@ def rectangle2mask(start, end, shape, axes_flips, swap_axes=False):
         end (tuple): Lower right coordinate of bounding box
         shape (tuple): The size of the two-dimensional array to fill
         axes_flips (tuple): Indicates if the affine flips each axes, x or y.
-        swap_axes (bool, optional): If the x and y axes need to be swaped.
+        swap_axes (bool, optional): If the x and y axes need to be swapped.
             Defaults to False.
 
     Returns:
@@ -366,7 +366,7 @@ def ellipse2mask(start, end, shape, axes_flips, swap_axes=False):
         end (tuple): Lower right coordinate of bounding box
         shape (tuple): The size of the two-dimensional array to fill
         axes_flips (tuple): Indicates if the affine flips each axes, x or y.
-        swap_axes (bool, optional): If the x and y axes need to be swaped.
+        swap_axes (bool, optional): If the x and y axes need to be swapped.
             Defaults to False.
 
     Returns:
