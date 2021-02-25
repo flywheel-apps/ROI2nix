@@ -41,6 +41,7 @@ def main(context):
             )
             # If the DICOM is Axial or Coronal (perp_char is "z" or "y") modify the
             # below adjustment matrix to indicate the left/right origin of the x-axis.
+            # otherwise, do nothing.
             if perp_char in ["z", "y"]:
                 adjustment_matrix[:, 0] = -1 * adjustment_matrix[:, 0]
 
@@ -48,10 +49,16 @@ def main(context):
         # basis unit vectors of the coordinate system of the original affine.
         # This is used to determine which axes to flip
         inv_reduced_aff = np.matmul(
+            # multiply by adjustment matrix, account for dicom L/R viewer presentation
             np.linalg.inv(
+                # take inverse of this unitary matrix
                 np.round(
+                    # put "1"s in each place
                     np.matmul(
+                        # multiply the 3x3 matrix down to size
                         nii.affine[:3, :3],
+                        # Generate the [1/norm(),...] for each column
+                        # Take the norm of the column vectors.. this is the pixel width
                         np.diag(1.0 / np.linalg.norm(nii.affine[:3, :3], axis=0)),
                     )
                 )

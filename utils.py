@@ -54,7 +54,11 @@ def io_proxy_wado(
     api_key, api_key_prefix, project_id, study=None, series=None, instance=None
 ):
     """
-    Request wrapper for io-proxy api (https://{instance}/io-proxy/docs#/)
+    Request wrapper for io-proxy api (https://{instance}/io-proxy/docs#/).
+
+    This offers a complete indexing of the dicoms in the wado database.
+
+    Admittedly, there could be other ways to do this.
 
     Args:
         api_key (str): Full instance api-key
@@ -96,6 +100,10 @@ def convert_ROI_to_nifti_form(
     """
     Converts ohifViewer ROI from a dicom to that of an individual nifti format.
 
+    Dicom annotations occur on the session-level info and with UID-centric formatting.
+    This function places the annotations in the file_obj info with file-centric
+    formatting.
+
     Args:
         fw_client (flywheel.Client): The active flywheel client
         project_id (str): The id of the project to search for io-proxy elements
@@ -105,6 +113,7 @@ def convert_ROI_to_nifti_form(
 
     Returns:
         dict: File object (file_obj) dictionary
+        str: Returns perpendicular axis to the plane (perp_char, e.g. "x")
     """
     host = fw_client._fw.api_client.configuration.host[:-8]
     api_key_prefix = fw_client._fw.api_client.configuration.api_key_prefix[
@@ -117,17 +126,23 @@ def convert_ROI_to_nifti_form(
 
     study_id, series_id = imagePath.split("$$$")[:2]
 
+    # Grab metadata of all instances related to this study and series.
+    # "Could" open all the dicoms in the series to get this... but it is in a database
+    # so why not grab it from the database.
     instances = io_proxy_wado(api_key, api_key_prefix, project_id, study_id, series_id)
 
     for roi_type in ["FreehandRoi", "RectangleRoi", "EllipticalRoi"]:
         if ohifViewer_info["measurements"].get(roi_type):
             for roi in ohifViewer_info["measurements"].get(roi_type):
                 if imagePath in roi["imagePath"]:
+                    # grab the instance (slice) that roi is drawn on from the imagePath
                     instance_id = roi["imagePath"].split("$$$")[2]
+                    # get the stored instance from instances list
                     slice_instance = [
                         i for i in instances if i["00080018"]["Value"][0] == instance_id
                     ][0]
                     # (0020, 0013) Instance Number
+                    # Integer "voxel" coordinate direction of the perpendicular axis.
                     InstanceNumber = slice_instance["00200013"]["Value"][0]
 
                     if roi_type not in out_ohifViewer_info["measurements"].keys():
@@ -141,10 +156,13 @@ def convert_ROI_to_nifti_form(
                     # from https://stackoverflow.com/questions/34782409/understanding-dicom-image-attributes-to-get-axial-coronal-sagittal-cuts
                     # https://groups.google.com/g/comp.protocols.dicom/c/GW04ODKR7Tc?pli=1
                     if ImageOrientationPatient == [1, 0, 0, 0, 1, 0]:
+                        # Axial Slices
                         perp_char = "z"
                     elif ImageOrientationPatient == [0, 1, 0, 0, 0, -1]:
+                        # Sagittal Slices
                         perp_char = "x"
                     elif ImageOrientationPatient == [1, 0, 0, 0, 0, -1]:
+                        # Coronal Slices
                         perp_char = "y"
 
                     # InstanceNumber is 1-indexed, niftis are 0-indexed.
@@ -171,7 +189,8 @@ def convert_dicom_to_nifti(context, input_name):
     acquisition = fw_client.get(file_input["hierarchy"]["id"])
     project_id = acquisition.parents["project"]
     # Prioritize dicom file-level ROI annotations
-    #   -- if they should occur this way soon....
+    #   -- if they should occur this way soon...
+    #   -- dicom annotations are currently on session-level info.
     if file_obj.get("info") and file_obj["info"].get("ohifViewer"):
         ohifViewer_info = file_obj["info"].get("ohifViewer")
 
@@ -199,6 +218,8 @@ def convert_dicom_to_nifti(context, input_name):
         shutil.copy(context.get_input_path(input_name), dicom_dir)
 
     # open one dicom file to extract studyInstanceUid and seriesInstanceUid
+    # If this was guaranteed to be a part of the dicom-file metadata, we could grab it
+    # from there. No guarantees. But all the tags are in the WADO database...
     dicom = None
     for root, _, files in os.walk(str(dicom_dir), topdown=False):
         for fl in files:
@@ -207,6 +228,8 @@ def convert_dicom_to_nifti(context, input_name):
                 dicom = pydicom.read_file(dicom_path, force=True)
                 break
             except Exception as e:
+                log.warning("Could not open dicom file. Trying another.")
+                log.exception(e)
                 pass
         if dicom:
             break
