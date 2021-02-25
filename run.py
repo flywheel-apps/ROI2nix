@@ -2,13 +2,13 @@
 import logging
 import os
 
-import flywheel
 import nibabel as nib
 import numpy as np
 from flywheel_gear_toolkit import GearToolkitContext
 
 from utils import (
     calculate_ROI_volume,
+    convert_dicom_to_nifti,
     gather_ROI_info,
     label2data,
     output_ROI_info,
@@ -29,18 +29,41 @@ def main(context):
         # Need updated file information.
         file_obj = file_input["object"]
 
+        # The inv_reduced_aff may need to be adjusted for dicoms
+        adjustment_matrix = np.eye(3)
         if file_obj["type"] == "nifti":
             nii = nib.load(context.get_input_path("Input_File"))
 
+        elif file_obj["type"] == "dicom":
+            # convert dicom-centric data to nifti-centric data
+            nii, file_obj, perp_char = convert_dicom_to_nifti(
+                context, input_name="Input_File"
+            )
+            # If the DICOM is Axial or Coronal (perp_char is "z" or "y") modify the
+            # below adjustment matrix to indicate the left/right origin of the x-axis.
+            # otherwise, do nothing.
+            if perp_char in ["z", "y"]:
+                adjustment_matrix[:, 0] = -1 * adjustment_matrix[:, 0]
+
         # Create an inverse of the matrix that is the closest projection onto the
         # basis unit vectors of the coordinate system of the original affine.
-        inv_reduced_aff = np.linalg.inv(
-            np.round(
-                np.matmul(
-                    nii.affine[:3, :3],
-                    np.diag(1.0 / np.linalg.norm(nii.affine[:3, :3], axis=0)),
+        # This is used to determine which axes to flip
+        inv_reduced_aff = np.matmul(
+            # multiply by adjustment matrix, account for dicom L/R viewer presentation
+            np.linalg.inv(
+                # take inverse of this unitary matrix
+                np.round(
+                    # put "1"s in each place
+                    np.matmul(
+                        # multiply the 3x3 matrix down to size
+                        nii.affine[:3, :3],
+                        # Generate the [1/norm(),...] for each column
+                        # Take the norm of the column vectors.. this is the pixel width
+                        np.diag(1.0 / np.linalg.norm(nii.affine[:3, :3], axis=0)),
+                    )
                 )
-            )
+            ),
+            adjustment_matrix,
         )
 
         # Collate label, color, and index information into a dictionary keyed

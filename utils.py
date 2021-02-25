@@ -5,15 +5,268 @@
 """
 
 import logging
+import os
 import os.path as op
 import re
+import shutil
+from ast import literal_eval as leval
 from collections import OrderedDict
+from pathlib import Path
+from zipfile import ZipFile
 
+import dicom2nifti
 import nibabel as nib
 import numpy as np
+import pydicom
+import requests
 from skimage import draw
 
 log = logging.getLogger(__name__)
+
+
+class InvalidDICOMFile(Exception):
+    """Exception raised when an invalid DICOM file is encountered.
+
+    Attributes:
+        expression -- input expression in which the error occurred
+        message -- explanation of the error
+    """
+
+    def __init__(self, message):
+        Exception.__init__(self)
+        self.message = message
+
+
+class InvalidROIError(Exception):
+    """Exception raised when session ROI data is invalid.
+
+    Attributes:
+        expression -- input expression in which the error occurred
+        message -- explanation of the error
+    """
+
+    def __init__(self, message):
+        Exception.__init__(self)
+        self.message = message
+
+
+def io_proxy_wado(
+    api_key, api_key_prefix, project_id, study=None, series=None, instance=None
+):
+    """
+    Request wrapper for io-proxy api (https://{instance}/io-proxy/docs#/).
+
+    This offers a complete indexing of the dicoms in the wado database.
+
+    Admittedly, there could be other ways to do this.
+
+    Args:
+        api_key (str): Full instance api-key
+        api_key_prefix (str): Type of user (e.g. 'scitran-user')
+        project_id (str): Project ID to inquire
+        study (str, optional): DICOM StudyUID. Defaults to None.
+        series (str, optional): DICOM SeriesUID. Defaults to None.
+        instance (str, optional): DICOM InstanceUID. Defaults to None.
+
+    Returns:
+        dict/list: A dictionary for dicom tags or a list of dictionaries with dicom tags
+    """
+    base_url = Path(api_key.split(":")[0])
+    base_url /= "io-proxy/wado"
+    base_url /= "projects/" + project_id
+    if study:
+        base_url /= "studies/" + study
+    if series:
+        base_url /= "series/" + series
+        base_url /= "instances"
+    if instance:
+        base_url /= instance
+        base_url /= "tags"
+    base_url = "https://" + str(base_url)
+
+    headers = {
+        "Authorization": api_key_prefix + " " + api_key,
+        "accept": "application/json",
+    }
+
+    req = requests.get(base_url, headers=headers)
+
+    return leval(req.text)
+
+
+def convert_ROI_to_nifti_form(
+    fw_client, project_id, file_obj, imagePath, ohifViewer_info
+):
+    """
+    Converts ohifViewer ROI from a dicom to that of an individual nifti format.
+
+    Dicom annotations occur on the session-level info and with UID-centric formatting.
+    This function places the annotations in the file_obj info with file-centric
+    formatting.
+
+    Args:
+        fw_client (flywheel.Client): The active flywheel client
+        project_id (str): The id of the project to search for io-proxy elements
+        file_obj (flywheel.File): File object data
+        imagePath (str): The DICOM representation of the ohifViewer ROI imagePath
+        ohifViewer_info (dict): The full session-level ohifViewer ROI dictionary.
+
+    Returns:
+        dict: File object (file_obj) dictionary
+        str: Returns perpendicular axis to the plane (perp_char, e.g. "x")
+    """
+    host = fw_client._fw.api_client.configuration.host[:-8]
+    api_key_prefix = fw_client._fw.api_client.configuration.api_key_prefix[
+        "Authorization"
+    ]
+    api_key_hash = fw_client._fw.api_client.configuration.api_key["Authorization"]
+    api_key = ":".join([host.split("//")[1], api_key_hash])
+
+    out_ohifViewer_info = {"measurements": {}}
+
+    study_id, series_id = imagePath.split("$$$")[:2]
+
+    # Grab metadata of all instances related to this study and series.
+    # "Could" open all the dicoms in the series to get this... but it is in a database
+    # so why not grab it from the database.
+    instances = io_proxy_wado(api_key, api_key_prefix, project_id, study_id, series_id)
+
+    for roi_type in ["FreehandRoi", "RectangleRoi", "EllipticalRoi"]:
+        if ohifViewer_info["measurements"].get(roi_type):
+            for roi in ohifViewer_info["measurements"].get(roi_type):
+                if imagePath in roi["imagePath"]:
+                    # grab the instance (slice) that roi is drawn on from the imagePath
+                    instance_id = roi["imagePath"].split("$$$")[2]
+                    # get the stored instance from instances list
+                    slice_instance = [
+                        i for i in instances if i["00080018"]["Value"][0] == instance_id
+                    ][0]
+                    # (0020, 0013) Instance Number
+                    # Integer "voxel" coordinate direction of the perpendicular axis.
+                    InstanceNumber = slice_instance["00200013"]["Value"][0]
+
+                    if roi_type not in out_ohifViewer_info["measurements"].keys():
+                        out_ohifViewer_info["measurements"][roi_type] = []
+
+                    # (0020, 0037) Image Orientation Patient
+                    # Needed to determine axis perpendicular to slice
+                    ImageOrientationPatient = list(
+                        map(round, slice_instance["00200037"]["Value"])
+                    )
+                    # from https://stackoverflow.com/questions/34782409/understanding-dicom-image-attributes-to-get-axial-coronal-sagittal-cuts
+                    # https://groups.google.com/g/comp.protocols.dicom/c/GW04ODKR7Tc?pli=1
+                    if ImageOrientationPatient == [1, 0, 0, 0, 1, 0]:
+                        # Axial Slices
+                        perp_char = "z"
+                    elif ImageOrientationPatient == [0, 1, 0, 0, 0, -1]:
+                        # Sagittal Slices
+                        perp_char = "x"
+                    elif ImageOrientationPatient == [1, 0, 0, 0, 0, -1]:
+                        # Coronal Slices
+                        perp_char = "y"
+
+                    # InstanceNumber is 1-indexed, niftis are 0-indexed.
+                    roi[
+                        "imagePath"
+                    ] = f"dicom.nii.gz#{perp_char}-{InstanceNumber-1},t-0$$$0"
+                    out_ohifViewer_info["measurements"][roi_type].append(roi)
+
+    file_obj["info"].update({"ohifViewer": out_ohifViewer_info})
+
+    return file_obj, perp_char
+
+
+def convert_dicom_to_nifti(context, input_name):
+
+    fw_client = context.client
+
+    # Get configuration, acquisition, and file info
+    file_input = context.get_input(input_name)
+
+    # Need updated file information.
+    file_obj = file_input["object"]
+    # ASSUMPTION: DICOMs will be stored at acquisition level
+    acquisition = fw_client.get(file_input["hierarchy"]["id"])
+    project_id = acquisition.parents["project"]
+    # Prioritize dicom file-level ROI annotations
+    #   -- if they should occur this way soon...
+    #   -- dicom annotations are currently on session-level info.
+    if file_obj.get("info") and file_obj["info"].get("ohifViewer"):
+        ohifViewer_info = file_obj["info"].get("ohifViewer")
+
+    else:
+        # session stores the OHIF annotations
+        session = fw_client.get(acquisition.parents["session"])
+        ohifViewer_info = session.info.get("ohifViewer")
+
+    if not ohifViewer_info:
+        error_message = "Session info is missing ROI data for selected DICOM file."
+        raise InvalidROIError(error_message)
+
+    # need studyInstanceUid and seriesInstanceUid from DICOM series to select
+    # appropriate records from the Session-level OHIF viewer annotations:
+    # e.g. session.info.ohifViewer.measurements.EllipticalRoi[0].imagePath =
+    #   studyInstanceUid$$$seriesInstanceUid$$$sopInstanceUid$$$0
+
+    # if archived, unzip dicom into work/dicom/
+    dicom_dir = context.work_dir / "dicom"
+    dicom_dir.mkdir(parents=True, exist_ok=True)
+    if file_input["location"]["name"].endswith(".zip"):
+        dicom_zip = ZipFile(context.get_input_path(input_name))
+        dicom_zip.extractall(path=dicom_dir)
+    else:
+        shutil.copy(context.get_input_path(input_name), dicom_dir)
+
+    # open one dicom file to extract studyInstanceUid and seriesInstanceUid
+    # If this was guaranteed to be a part of the dicom-file metadata, we could grab it
+    # from there. No guarantees. But all the tags are in the WADO database...
+    dicom = None
+    for root, _, files in os.walk(str(dicom_dir), topdown=False):
+        for fl in files:
+            try:
+                dicom_path = Path(root) / fl
+                dicom = pydicom.read_file(dicom_path, force=True)
+                break
+            except Exception as e:
+                log.warning("Could not open dicom file. Trying another.")
+                log.exception(e)
+                pass
+        if dicom:
+            break
+
+    if dicom:
+        studyInstanceUid = dicom.StudyInstanceUID
+        seriesInstanceUid = dicom.SeriesInstanceUID
+    else:
+        error_message = "An invalid dicom file was encountered."
+        raise InvalidDICOMFile(error_message)
+
+    nifti_output = context.output_dir / "converted_dicom.nii.gz"
+    # convert dicom to nifti (work/dicom.nii.gz)
+    try:
+        nii_stats = dicom2nifti.dicom_series_to_nifti(dicom_dir, nifti_output)
+    except Exception as e:
+        log.exception(e)
+        error_message = (
+            "An invalid dicom file was encountered. "
+            '"SeriesInstanceUID", "InstanceNumber", '
+            '"ImageOrientationPatient", or "ImagePositionPatient"'
+            " may be missing from the DICOM series."
+        )
+        raise InvalidDICOMFile(error_message)
+
+    imagePath = f"{studyInstanceUid}$$${seriesInstanceUid}$$$"
+    # check for imagePath in ohifViewer info
+    if imagePath not in str(ohifViewer_info):
+        error_message = "Session info is missing ROI data for selected DICOM file."
+        raise InvalidROIError(error_message)
+
+    file_obj, perp_char = convert_ROI_to_nifti_form(
+        fw_client, project_id, file_obj, imagePath, ohifViewer_info
+    )
+
+    nii = nii_stats["NII"]
+    return nii, file_obj, perp_char
 
 
 def poly2mask(vertex_row_coords, vertex_col_coords, shape):
@@ -518,8 +771,12 @@ def save_single_ROIs(context, file_input, labels, data, affine, binary):
             filename = "ROI_" + label_out + "_" + file_input["location"]["name"]
             # If the original file_input was an uncompressed NIfTI
             # ensure compression
-            if filename[-3:] == "nii":
+            if filename.endswith(".nii"):
                 filename += ".gz"
+            elif filename.endswith(".dicom.zip"):
+                filename = filename.replace(".dicom.zip", ".nii.gz")
+            elif filename.endswith(".zip"):
+                filename = filename.replace(".zip", ".nii.gz")
 
             nib.save(label_nii, op.join(context.output_dir, filename))
     else:

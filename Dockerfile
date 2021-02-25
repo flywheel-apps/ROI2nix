@@ -10,7 +10,8 @@ LABEL maintainer="Flywheel <support@flywheel.io>"
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
     python3-pip \ 
-    python3-setuptools && \
+    python3-setuptools \
+    libgdcm-tools && \
     rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
 # Make directory for flywheel spec (v0):
