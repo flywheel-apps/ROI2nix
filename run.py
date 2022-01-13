@@ -44,6 +44,8 @@ def main(context):
             # otherwise, do nothing.
             if perp_char in ["z", "y"]:
                 adjustment_matrix[:, 0] = -1 * adjustment_matrix[:, 0]
+            if perp_char == "z":  # also flip slice direction
+                adjustment_matrix[:, 2] = -1 * adjustment_matrix[:, 2]
 
         # Create an inverse of the matrix that is the closest projection onto the
         # basis unit vectors of the coordinate system of the original affine.
