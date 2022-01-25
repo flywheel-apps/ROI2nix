@@ -42,6 +42,17 @@ class InvalidDICOMFile(Exception):
         Exception.__init__(self)
         self.message = message
 
+class InvalidConversion(Exception):
+    """Exception raised when a conversion cannot be done (nifti to dicom, nifti to nrrd).
+
+    Attributes:
+        expression -- input expression in which the error occurred
+        message -- explanation of the error
+    """
+
+    def __init__(self, message):
+        Exception.__init__(self)
+        self.message = message
 
 class InvalidROIError(Exception):
     """Exception raised when session ROI data is invalid.
@@ -913,7 +924,6 @@ def save_bitmasked_ROIs(
         bits = 31
         np_type = np.int32
     elif combined_output_size == "int64":
-        bits = 63
         np_type = np.int64
 
     if len(labels) > bits:
@@ -1027,8 +1037,8 @@ def write_3D_Slicer_CTBL(context, file_input, labels):
 
 
 def save_dicom_out(dicom_files, dicoms, dicom_output, data):
-    for i, dicom_info in enumerate(zip(dicom_files, dicoms)):
 
+    for i, dicom_info in enumerate(zip(dicom_files, dicoms)):
         dicom_file = dicom_info[0]
         dicom = dicom_info[1]
         file_name = dicom_file.name
