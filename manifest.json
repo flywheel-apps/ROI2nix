@@ -48,17 +48,7 @@
             "description": "Saves all ROIs in a single bitmasked file. If less than 2 ROIs exists, then this has no effect. Default is False.",
             "type": "boolean"
         },
-        "combined_output_size": {
-            "default": "int32",
-            "description": "Bit depth of combined ROI bitmasked file.",
-            "enum": [
-                "int8",
-                "int16",
-                "int32",
-                "int64"
-            ],
-            "type": "string"
-        },
+
         "save_slicer_color_table": {
             "default": false,
             "description": "Saves a 3D Slicer colortable file for 3D Slicer integration. Default is False.",
