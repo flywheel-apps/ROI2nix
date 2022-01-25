@@ -33,6 +33,11 @@
         }
     },
     "config": {
+        "save_NRRD": {
+            "default": true,
+            "description": "Saves the ROI's as output Type NRRD instead of Nifti.  Default False",
+            "type": "boolean"
+        },
         "save_binary_masks": {
             "default": true,
             "description": " Saves individually labeled ROIs as binary masks. Otherwise use bitmasked values (sums of powers of two). Default is True.",
