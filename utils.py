@@ -827,8 +827,12 @@ def save_bitmasked_ROIs(
 
         # If the original file_input was an uncompressed NIfTI
         # ensure compression
-        if filename[-3:] == "nii":
+        if filename.endswith(".nii"):
             filename += ".gz"
+        elif filename.endswith(".dicom.zip"):
+            filename = filename.replace(".dicom.zip", ".nii.gz")
+        elif filename.endswith(".zip"):
+            filename = filename.replace(".zip", ".nii.gz")
 
         nib.save(all_labels_nii, op.join(context.output_dir, filename))
     else:
