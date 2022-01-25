@@ -13,13 +13,19 @@ from ast import literal_eval as leval
 from collections import OrderedDict
 from pathlib import Path
 from zipfile import ZipFile
+import glob
+from scipy import stats
+
 
 import dicom2nifti
 import nibabel as nib
+import nrrd
 import numpy as np
 import pydicom
 import requests
 from skimage import draw
+from dicom2nifti.image_volume import SliceOrientation
+
 
 log = logging.getLogger(__name__)
 
@@ -137,7 +143,7 @@ def convert_ROI_to_nifti_form(
                 if imagePath in roi["imagePath"]:
                     # grab the instance (slice) that roi is drawn on from the imagePath
                     instance_id = roi["imagePath"].split("$$$")[2]
-                    # get the stored instance from instances list
+                    # get the stored instance (SOP UID) from instances list
                     slice_instance = [
                         i for i in instances if i["00080018"]["Value"][0] == instance_id
                     ][0]
@@ -212,8 +218,20 @@ def convert_dicom_to_nifti(context, input_name):
     dicom_dir = context.work_dir / "dicom"
     dicom_dir.mkdir(parents=True, exist_ok=True)
     if file_input["location"]["name"].endswith(".zip"):
+        # Unzip, pulling any nested files to a top directory.
         dicom_zip = ZipFile(context.get_input_path(input_name))
-        dicom_zip.extractall(path=dicom_dir)
+        for member in dicom_zip.namelist():
+            filename = os.path.basename(member)
+            # skip directories
+            if not filename:
+                continue
+
+            # copy file (taken from zipfile's extract)
+            source = dicom_zip.open(member)
+            target = open(os.path.join(dicom_dir, filename), "wb")
+            with source, target:
+                shutil.copyfileobj(source, target)
+        #dicom_zip.extractall(path=dicom_dir)
     else:
         shutil.copy(context.get_input_path(input_name), dicom_dir)
 
@@ -241,10 +259,13 @@ def convert_dicom_to_nifti(context, input_name):
         error_message = "An invalid dicom file was encountered."
         raise InvalidDICOMFile(error_message)
 
-    nifti_output = context.output_dir / "converted_dicom.nii.gz"
+    dicom_output = context.output_dir / "converted_dicom"
     # convert dicom to nifti (work/dicom.nii.gz)
     try:
-        nii_stats = dicom2nifti.dicom_series_to_nifti(dicom_dir, nifti_output)
+        # Copy dicoms to a new directory
+        if not os.path.exists(dicom_output):
+            shutil.copytree(dicom_dir, dicom_output)
+        #nii_stats = dicom2nifti.dicom_series_to_nifti(dicom_dir, dicom_output)
     except Exception as e:
         log.exception(e)
         error_message = (
@@ -261,12 +282,41 @@ def convert_dicom_to_nifti(context, input_name):
         error_message = "Session info is missing ROI data for selected DICOM file."
         raise InvalidROIError(error_message)
 
-    file_obj, perp_char = convert_ROI_to_nifti_form(
-        fw_client, project_id, file_obj, imagePath, ohifViewer_info
-    )
+    # file_obj, perp_char = convert_ROI_to_nifti_form(
+    #     fw_client, project_id, file_obj, imagePath, ohifViewer_info
+    # )
+    return dicom_output, dicom_dir, file_obj
 
-    nii = nii_stats["NII"]
-    return nii, file_obj, perp_char
+
+def calculate_transformation_matrix(adjustment_matrix, affine):
+
+    # Create an inverse of the matrix that is the closest projection onto the
+    # basis unit vectors of the coordinate system of the original affine.
+    # This is used to determine which axes to flip
+
+    inv_reduced_aff = np.matmul(
+        # multiply by adjustment matrix, account for dicom L/R viewer presentation
+        np.linalg.inv(
+            # take inverse of this unitary matrix
+            np.round(
+                # put "1"s in each place
+                np.matmul(
+                    # multiply the 3x3 matrix down to size
+                    affine[:3, :3],
+                    # Generate the [1/norm(),...] for each column
+                    # Take the norm of the column vectors.. this is the pixel width
+                    np.diag(1.0 / np.linalg.norm(affine[:3, :3], axis=0)),
+                )
+            )
+        ),
+        adjustment_matrix,
+    )
+    print(adjustment_matrix)
+    print('inv_reduced_aff:')
+    print(inv_reduced_aff)
+    print(affine)
+
+    return inv_reduced_aff
 
 
 def poly2mask(vertex_row_coords, vertex_col_coords, shape):
@@ -424,6 +474,77 @@ def ellipse2mask(start, end, shape, axes_flips, swap_axes=False):
     return mask
 
 
+
+def fill_roi_dicom_slice(data,
+                            sop,
+                            roi_handles,
+                            roi_type="FreehandRoi",
+                            dicoms = None,
+                         reactOHIF=True):
+
+    dicom_sops = [d.SOPInstanceUID for d in dicoms]
+    slice = dicom_sops.index(sop)
+
+    swap_axes = True
+    flips = [False, False]
+
+    orientation_slice = data[:, :, slice]
+
+    if roi_type == "FreehandRoi":
+        if reactOHIF:
+            roi_points = roi_handles["points"]
+        else:
+            roi_points = roi_handles
+
+        # If this slice already has data (i.e. this label was used in an ROI
+        # perpendicular to the current slice) we need to have the logical or
+        # of that data and the new data
+
+        orientation_slice[:, :] = np.logical_or(
+            freehand2mask(roi_points, orientation_slice.shape, flips, swap_axes),
+            orientation_slice[:, :],
+        )
+
+    elif roi_type == "RectangleRoi":
+        start = roi_handles["start"]
+        end = roi_handles["end"]
+
+        # If this slice already has data (i.e. this label was used in an ROI
+        # perpendicular to the current slice) we need to have the logical or
+        # of that data and the new data
+        orientation_slice[:, :] = np.logical_or(
+            rectangle2mask(start, end, orientation_slice.shape, flips, swap_axes),
+            orientation_slice[:, :],
+        )
+
+    elif roi_type == "EllipticalRoi":
+        start = roi_handles["start"]
+        end = roi_handles["end"]
+
+        # If this slice already has data (i.e. this label was used in an ROI
+        # perpendicular to the current slice) we need to have the logical or
+        # of that data and the new data
+        orientation_slice[:, :] = np.logical_or(
+            ellipse2mask(start, end, orientation_slice.shape, flips, swap_axes),
+            orientation_slice[:, :],
+        )
+    data[:, :, slice] = orientation_slice
+
+    return data
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 def fill_roi_slice(
     data, img_path, roi_handles, inv_reduced_aff, roi_type="FreehandRoi", reactOHIF=True
 ):
@@ -444,6 +565,7 @@ def fill_roi_slice(
     # orientation character gives us the direction perpendicular to the
     # plane of the ROI
     orientation_char = img_path[img_path.find("#") + 1]
+    log.debug(f'img_path: {img_path}')
     shape = data.shape
     # orientation_coordinate gives us the coordinate along the axis
     # perpendicular to plane of the ROI
@@ -502,6 +624,8 @@ def fill_roi_slice(
         orientation_axis = ""
         orientation_slice = [0, 0, 0]
 
+    log.debug(f'Orientation char: {orientation_char}')
+
     if all(np.abs(orientation_axis) == [1, 0, 0]):
         orientation_slice = data[orientation_coordinate, :, :]
 
@@ -557,7 +681,7 @@ def fill_roi_slice(
         )
 
 
-def label2data(label, shape, info, inv_reduced_aff):
+def label2data(label, info, dicoms, shape):
     """
     label2data gives the roi data block for a nifti file with `shape` and
     `info`
@@ -616,26 +740,14 @@ def label2data(label, shape, info, inv_reduced_aff):
             if info["ohifViewer"]["measurements"].get(roi_type):
                 for roi in info["ohifViewer"]["measurements"].get(roi_type):
                     if roi.get("location") and roi["location"] == label:
-                        fill_roi_slice(
+                        data = fill_roi_dicom_slice(
                             data,
-                            roi["imagePath"],
+                            roi["SOPInstanceUID"],
                             roi["handles"],
-                            inv_reduced_aff,
                             roi_type=roi_type,
+                            dicoms=dicoms,
                         )
-    # deprioritize any OHIF Meteor annotations...
-    # ROI2Nix will not do both
-    # TODO: Deprecate OHIF Meteor functionality
-    elif "roi" in info:
-        for roi in info["roi"]:
-            if roi["label"] == label:
-                fill_roi_slice(
-                    data,
-                    roi["imagePath"],
-                    roi["handles"],
-                    inv_reduced_aff,
-                    reactOHIF=False,
-                )
+
     return data
 
 
@@ -739,7 +851,7 @@ def calculate_ROI_volume(labels, data, affine):
             label_dict["volume"] = volume  # mm^3
 
 
-def save_single_ROIs(context, file_input, labels, data, affine, binary):
+def save_single_ROIs(output_dir, file_input, labels, data, affine, options, binary, save_nrrd):
     """
     Output_Single_ROIs saves single ROIs to their own file. If `binary` is
         true, we have a binary mask (0,1) for the file, else the value is
@@ -750,6 +862,7 @@ def save_single_ROIs(context, file_input, labels, data, affine, binary):
         labels (OrderedDict): Label data
         data (numpy.ndarray): NIfTI data object
         affine (numpy.ndarray): NIfTI affine
+        options (dict): a list of options for the nrrd format
         binary (boolean): Whether to output as binary mask or bitmasked value
     """
 
@@ -766,25 +879,17 @@ def save_single_ROIs(context, file_input, labels, data, affine, binary):
                 int_type = np.int64
             export_data = np.bitwise_and(data, indx).astype(int_type) / modifier
 
-            label_nii = nib.Nifti1Pair(export_data, affine)
             label_out = re.sub("[^0-9a-zA-Z]+", "_", label)
             filename = "ROI_" + label_out + "_" + file_input["location"]["name"]
-            # If the original file_input was an uncompressed NIfTI
-            # ensure compression
-            if filename.endswith(".nii"):
-                filename += ".gz"
-            elif filename.endswith(".dicom.zip"):
-                filename = filename.replace(".dicom.zip", ".nii.gz")
-            elif filename.endswith(".zip"):
-                filename = filename.replace(".zip", ".nii.gz")
 
-            nib.save(label_nii, op.join(context.output_dir, filename))
+            write_data_out(export_data, filename, output_dir, save_nrrd, affine=affine, options=options)
+
     else:
         log.warning("No ROIs were found for this image.")
 
 
 def save_bitmasked_ROIs(
-    context, labels, file_input, data, affine, combined_output_size
+    output_dir, labels, file_input, data, affine, options, combined_output_size, save_nrrd
 ):
     """
     save_bitmasked_ROIs saves all ROIs rendered into a bitmasked NIfTI file.
@@ -822,17 +927,49 @@ def save_bitmasked_ROIs(
         )
 
     if len(labels) > 1:
-        all_labels_nii = nib.Nifti1Pair(data.astype(np_type), affine)
+        # all_labels_nii = nib.Nifti1Pair(data.astype(np_type), affine)
         filename = "ROI_ALL_" + file_input["location"]["name"]
+
+        write_data_out(data.astype(np_type), filename, output_dir, save_nrrd, affine=affine, options=options)
+
+    else:
+        log.warning("There are not enough ROIs to save an aggregate.")
+
+def write_data_out(data, output_filename, output_dir, save_nrrd, affine=None, options=None):
+
+    if save_nrrd:
+        log.debug('save NRRD is True')
+        # If the original file_input was an uncompressed NIfTI
+        # ensure compression
+        if output_filename.endswith(".gz"):
+            output_filename = output_filename[:-1 * len('.nii.gz')]
+        elif output_filename.endswith(".nii"):
+            output_filename = output_filename[:-1 * len('.nii')]
+        elif output_filename.endswith(".dicom.zip"):
+            output_filename = output_filename[:-1 * len('.dicom.zip')]
+        elif output_filename.endswith(".zip"):
+            output_filename = output_filename[:-1 * len('.zip')]
+
+        output_filename += '.nrrd'
+
+
+        log.debug(f'new output name = {output_filename}')
+
+        save_nrrd_file(data, op.join(output_dir, output_filename), options)
+
+    else:
+        label_nii = nib.Nifti1Pair(data, affine)
 
         # If the original file_input was an uncompressed NIfTI
         # ensure compression
-        if filename[-3:] == "nii":
-            filename += ".gz"
+        if output_filename.endswith(".nii"):
+            output_filename += ".gz"
+        elif output_filename.endswith(".dicom.zip"):
+            output_filename = output_filename.replace(".dicom.zip", ".nii.gz")
+        elif output_filename.endswith(".zip"):
+            output_filename = output_filename.replace(".zip", ".nii.gz")
 
-        nib.save(all_labels_nii, op.join(context.output_dir, filename))
-    else:
-        log.warning("There are not enough ROIs to save an aggregate.")
+        nib.save(label_nii, op.join(output_dir, output_filename))
 
 
 def output_ROI_info(context, labels):
@@ -887,3 +1024,298 @@ def write_3D_Slicer_CTBL(context, file_input, labels):
             )
 
         ctbl.close()
+
+
+def save_dicom_out(dicom_files, dicoms, dicom_output, data):
+    for i, dicom_info in enumerate(zip(dicom_files, dicoms)):
+
+        dicom_file = dicom_info[0]
+        dicom = dicom_info[1]
+        file_name = dicom_file.name
+        dicom_out = dicom_output/file_name
+
+        arr = dicom.pixel_array
+        print(arr.shape)
+        arr = data[:,:,i]
+        print(arr.shape)
+        arr=arr.squeeze()
+        print(arr.shape)
+
+        dicom.BitsAllocated = 64
+        dicom.BitsStored = 64
+
+        dicom.HighBit = 63
+        dicom['PixelData'].VR="OW"
+        arr = np.uint64(arr)
+
+        dicom.PixelData=arr.tobytes()
+        dicom.save_as(dicom_out)
+
+
+def save_rois(output_dir, file_input, labels, data, dicom_files, dicom_output, config):
+
+
+    # Output individual ROIs
+    save_single_ROIs(
+        output_dir, file_input, labels, data, affine, options, config["save_binary_masks"], config["save_NRRD"]
+    )
+
+    # Output all ROIs in one file, if selected
+    # TODO: If we want different output styles (last written, 4D Nifti)
+    # we would implement that here...with a combo box in the manifest.
+    if config["save_combined_output"]:
+        save_bitmasked_ROIs(
+            output_dir,
+            labels,
+            file_input,
+            data,
+            affine,
+            options,
+            config["combined_output_size"],
+            config["save_NRRD"]
+        )
+    pass
+
+# Heavily relying on this for the dicom header stuff: https://github.com/chunweiliu/nrrd/blob/master/DICOM_to_NRRD.py
+# And this for the nifti 2 nrrd stuff: https://github.com/YuanYuYuan/MIDP/blob/master/nifti2nrrd.py
+
+def load_dicom_options(dicom_dir, nifti):
+    image = dicom2nifti.image_volume.ImageVolume(nifti)
+    affine = nifti.affine
+
+    file_names = glob.glob(os.path.join(dicom_dir,'*'))
+    file_names.sort()
+    #file_names = file_names[::-1]
+
+    loaded_dicoms = [pydicom.read_file(fn) for fn in file_names]
+    positions = np.mat([ld.ImagePositionPatient for ld in loaded_dicoms])
+    zdif = np.diff(positions, axis=0)[:, 0]
+    mzdif = stats.mode(zdif).mode[0][0]
+    mzdif = np.round(mzdif, 4)
+
+    ds = loaded_dicoms[0]
+    # https://nipy.org/nibabel/dicom/dicom_orientation.html#dicom-slice-affine
+    # Calc Multi:
+    flist = ds.ImageOrientationPatient
+    F = np.mat([[flist[3],flist[0]],[flist[4],flist[1]],[flist[5],flist[2]]])
+    # #mult = np.mat([[-1,-1],
+    #                [-1,-1],
+    #                [1,1]])
+    #F = np.multiply(F, mult)
+    # dr = ds.PixelSpacing[0]
+    # dc = ds.PixelSpacing[1]
+    # ss = float(ds.SpacingBetweenSlices)
+    xs = np.array(F[:,1]).flatten()
+    ys = np.array(F[:,0]).flatten()
+    n = np.cross(list(ys), list(xs))
+
+    N=len(loaded_dicoms)
+    dcT1=loaded_dicoms[0]
+    dcTN=loaded_dicoms[-1]
+
+    T1=dcT1.ImagePositionPatient
+    #T1 = np.multiply(T1, [-1, -1, 1])
+    TN=dcTN.ImagePositionPatient
+
+    # Asingle = np.array([
+    #     [F[0, 0], F[0, 1], n[0]],
+    #     [F[1, 0], F[1, 1], n[1]],
+    #     [F[2, 0], F[2, 1], n[2]],
+    #     ])
+
+    Asingle = np.array([
+        [F[0, 0], F[0, 1], n[0],T1[0]],
+        [F[1, 0], F[1, 1], n[1],T1[1]],
+        [F[2, 0], F[2, 1], n[2],T1[2]],
+        [0, 0, 0, 1]
+        ])
+
+    affine_inverse = np.linalg.inv(Asingle)
+    transformed_x = np.transpose(np.dot(affine_inverse, [[1], [0], [0], [0]]))[0]
+    transformed_y = np.transpose(np.dot(affine_inverse, [[0], [1], [0], [0]]))[0]
+    transformed_z = np.transpose(np.dot(affine_inverse, [[0], [0], [1], [0]]))[0]
+    print(transformed_x)
+    print(transformed_y)
+    print(transformed_z)
+
+    x_component, y_component, z_component = dicom2nifti.image_volume.__calc_most_likely_direction__(transformed_x, transformed_y, transformed_z)
+    print(x_component, y_component, z_component)
+
+    axial_orientation = SliceOrientation()
+    axial_orientation.normal_component = z_component
+    axial_orientation.x_component = x_component
+    axial_orientation.x_inverted = np.sign(transformed_x[axial_orientation.x_component]) < 0
+    axial_orientation.y_component = y_component
+    axial_orientation.y_inverted = np.sign(transformed_y[axial_orientation.y_component]) < 0
+    # Find slice orientiation for the coronal size
+    # Find the index of the max component to know which component is the direction in the size
+    coronal_orientation = SliceOrientation()
+    coronal_orientation.normal_component = y_component
+    coronal_orientation.x_component = x_component
+    coronal_orientation.x_inverted = np.sign(transformed_x[coronal_orientation.x_component]) < 0
+    coronal_orientation.y_component = z_component
+    coronal_orientation.y_inverted = np.sign(transformed_z[coronal_orientation.y_component]) < 0
+    # Find slice orientation for the sagittal size
+    # Find the index of the max component to know which component is the direction in the size
+    sagittal_orientation = SliceOrientation()
+    sagittal_orientation.normal_component = x_component
+    sagittal_orientation.x_component = y_component
+    sagittal_orientation.x_inverted = np.sign(transformed_y[sagittal_orientation.x_component]) < 0
+    sagittal_orientation.y_component = z_component
+    sagittal_orientation.y_inverted = np.sign(transformed_z[sagittal_orientation.y_component]) < 0
+    # Assert that the slice normals are not equal
+    print(sagittal_orientation.normal_component)
+    print(coronal_orientation.normal_component)
+    print(axial_orientation.normal_component)
+
+
+    new_affine = np.eye(4)
+    new_affine[:, 0] = affine[:, sagittal_orientation.normal_component]
+    new_affine[:, 1] = affine[:, coronal_orientation.normal_component]
+    new_affine[:, 2] = affine[:, axial_orientation.normal_component]
+    point = [0, 0, 0, 1]
+
+    # If the orientation of coordinates is inverted, then the origin of the "new" image
+    # would correspond to the last voxel of the original image
+    # First we need to find which point is the origin point in image coordinates
+    # and then transform it in world coordinates
+    if not axial_orientation.x_inverted:
+        print('inverting axial x')
+        new_affine[:, 0] = - new_affine[:, 0]
+
+        # new_affine[0, 3] = - new_affine[0, 3]
+    if axial_orientation.y_inverted:
+        print('inverting axial y')
+        new_affine[:, 1] = - new_affine[:, 1]
+
+        # new_affine[1, 3] = - new_affine[1, 3]
+    if coronal_orientation.y_inverted:
+        print('inverting axual z')
+        new_affine[:, 2] = - new_affine[:, 2]
+
+
+
+    print('Asingle')
+    print(np.mat(Asingle))
+    print('new_affine')
+    print(new_affine)
+
+
+    file_name = file_names[0]
+    ds = pydicom.read_file(file_name)
+    options = dict()
+    options['type'] = 'short'
+    options['dimension'] = 3
+    #options['space dimension'] = 3
+    options['space units'] = ["mm", "mm", "mm"]
+    options['space'] = 'right-anterior-superior'
+    #options['space'] ='scanner-xyz'
+    options['space directions'] = [[1*mzdif, 0, 0],
+                                   [0, 1*ds.PixelSpacing[0], 0],
+                                   [0, 0, 1*ds.PixelSpacing[1]]]
+
+    # options['space directions'] = [[1*ds.PixelSpacing[0], 0, 0],
+    #                                [0, 1*ds.PixelSpacing[1], 0],
+    #                                [0, 0, 1*mzdif]]
+
+    # sdirec =                [[1*ds.PixelSpacing[0], 0, 0],
+    #                                 [0, 1*ds.PixelSpacing[1], 0],
+    #                                 [0, 0, 1*mzdif]]
+
+
+
+    matout = matstring(Asingle)
+
+    #options['space directions'] = sdirec #np.matmul(Asingle, sdirec)
+    options['measurement frame'] = affine[:3,:3]
+    options['kinds'] = ['space', 'space', 'space']
+    #options['space origin'] = list(np.array(adj_mat*ds.ImagePositionPatient)[0])
+    #options['space origin'] = list(np.array(adj_mat * ds.ImagePositionPatient)[0])
+    options['space origin'] = [affine[0,-1], affine[1,-1], affine[2,-1]]
+   # options['measurement frame'] = Asingle
+    print('affine')
+    print(affine)
+
+    #print(options['space origin'])
+   # print(options['space directions'])
+
+    #options['space directions'] = np.swapaxes(options['space directions'], 0, 2)
+
+    return options
+
+def matstring(mat):
+    matout = ""
+    for row in mat:
+        row = np.array(row).squeeze()
+        rowout = []
+        for x in row:
+            rowout.append(_convert_to_reproducible_floatingpoint(x))
+
+        matout += f'({",".join(rowout)}) '
+
+    return matout
+
+
+def _convert_to_reproducible_floatingpoint( x ):
+    if type(x) == float:
+        value = '{:.16f}'.format(x).rstrip('0').rstrip('.') # Remove trailing zeros, and dot if at end
+    else:
+        value = str(x)
+    return value
+
+def save_nrrd_file(data_3d, filename, options):
+
+    # from matplotlib import pyplot as pl
+    # import sys
+
+
+
+    #sys.exit()
+    # data_3d = np.swapaxes(data_3d, 0, 2)
+    #data_3d = np.swapaxes(data_3d, 0, 1)
+    # pl.matshow(data_3d[420,:,:].squeeze())
+    # pl.matshow(data_3d[:, 420, :].squeeze())
+    # pl.matshow(data_3d[:, :, 5].squeeze())
+    #
+    # pl.show()
+    data_3d = data_3d[:, :, :]
+
+    # write the stack files in nrrd format
+    nrrd.write(filename, data_3d, options)
+
+# Xform mat:
+# 0.997427 0.0691727 -0.0188028 2
+# -0.0679978 0.996043 0.0572329 0
+# 0.0226873 -0.0558071 0.998184 0
+# 0 0 0 1
+
+# def convert_nifti_to_nrrd(nibabel_nifti, dicom_path):
+#     data = nib.load(os.path.join(
+#         args.nifti_dir,
+#         data_idx + '.nii.gz'
+#     )).get_data()
+#
+#     header = nrrd.read_header(os.path.join(
+#         args.nrrd_dir,
+#         data_idx,
+#         'img.nrrd'
+#     ))
+#     zoom = tuple(
+#         (s1 / s2) for s1, s2
+#         in zip(header['sizes'], data.shape)
+#     )
+#     data = ndimage.zoom(
+#         data,
+#         zoom,
+#         order=0,
+#         mode='nearest'
+#     )
+#     assert data.shape == tuple(header['sizes'])
+#     nrrd.write(
+#         os.path.join(
+#             args.output_dir,
+#             data_idx + '.nrrd'
+#         ),
+#         data,
+#         header=header
+#     )
