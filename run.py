@@ -9,15 +9,10 @@ import glob
 import pydicom
 from pathlib import Path
 
-from utils import (
-    calculate_ROI_volume,
+from utils.utils import (
     convert_dicom_to_nifti,
     gather_ROI_info,
     label2data,
-    output_ROI_info,
-    write_3D_Slicer_CTBL,
-    calculate_transformation_matrix,
-    save_rois,
     save_dicom_out
 )
 
@@ -34,8 +29,8 @@ def main(context):
         file_obj = file_input["object"]
 
         # The inv_reduced_aff may need to be adjusted for dicoms
-        adjustment_matrix = np.eye(3)
         if file_obj["type"] == "nifti":
+            if
             nii = nib.load(context.get_input_path("Input_File"))
             # TODO: Add check here for save NRRD, curently not possible for only a nifti file due to header stuffies
 
