@@ -38,7 +38,7 @@ class MeasurementExport(ABC):
         self.fw_client = fw_client
         self.combine = combine
         self.ohifViewer_info = {}
-        self.file_object = file_object
+        self.file_obj = file_object
         self.validROIs = ["RectangleRoi", "EllipticalRoi", "FreehandRoi"]
         self.work_dir = work_dir
         self.output_dir = output_dir
@@ -69,11 +69,6 @@ class MeasurementExport(ABC):
         """Gets all the labels associated with this particular dicom"""
         pass
 
-    @abstractmethod
-    def save_data(self):
-        """saves the data"""
-        pass
-
     def process_file(self):
         self.prep_data()
         self.get_labels()
@@ -96,7 +91,7 @@ class MeasurementExportFromDicom(MeasurementExport):
         self.labels = []  # A list of all measurement label names for this dicom
         self.shape = ()  # The shape of the data matrix that will have ROI's put on it.
 
-        self.project_id = self.file_object.parents["project"]
+        self.project_id = self.file_obj.parents["project"]
         # Prioritize dicom file-level ROI annotations
         #   -- if they should occur this way soon...
         #   -- dicom annotations are currently on session-level info.
@@ -105,12 +100,13 @@ class MeasurementExportFromDicom(MeasurementExport):
 
         else:
             # session stores the OHIF annotations
-            session = self.fw_client.get(self.file_object.parents["session"])
+            session = self.fw_client.get(self.file_obj.parents["session"])
             self.ohifViewer_info = session.info.get("ohifViewer")
 
         if not self.ohifViewer_info:
             error_message = "Session info is missing ROI data for selected DICOM file."
             raise InvalidROIError(error_message)
+
 
     def prep_data(self):
         # need studyInstanceUid and seriesInstanceUid from DICOM series to select
@@ -121,7 +117,7 @@ class MeasurementExportFromDicom(MeasurementExport):
         # if archived, unzip dicom into work/dicom/
         self.orig_dicom_dir = self.work_dir / "dicom"
         self.orig_dicom_dir.mkdir(parents=True, exist_ok=True)
-        if self.input_file_path.endswith(".zip"):
+        if self.input_file_path.as_posix().endswith(".zip"):
             # Unzip, pulling any nested files to a top directory.
             dicom_zip = ZipFile(self.input_file_path)
             for member in dicom_zip.namelist():
@@ -223,7 +219,7 @@ class MeasurementExportFromDicom(MeasurementExport):
         for label in self.labels:
             data = self.label2data(label)
             # data *= self.labels[label]["index"]
-            data *= 1
+            data = data.astype(self.dtype)
             self.convert_working_dir(data)
             self.save_working_dir(label)
 
@@ -231,6 +227,7 @@ class MeasurementExportFromDicom(MeasurementExport):
             data = np.zeros(self.shape, dtype=self.dtype)
             for label in self.labels:
                 label_data = self.label2data(label)
+                label_data = label_data.astype(self.dtype)
                 label_data *= self.labels[label]["index"]
                 data += label_data
 
@@ -316,20 +313,20 @@ class MeasurementExportFromDicom(MeasurementExport):
         self.dicoms = dicoms
         self.dicom_files = dicom_files
 
+
     def label2data(self, label):
         data = np.zeros(self.shape, dtype=np.bool)
 
         for roi_type in self.ohifViewer_info:
-            for roi_list in self.ohifViewer_info[roi_type]:
-                for roi in roi_list:
-                    if roi.get("location") == label:
-                        data = self.fill_roi_dicom_slice(
-                            data,
-                            roi["SOPInstanceUID"],
-                            roi["handles"],
-                            dicoms=self.dicoms,
-                            roi_type=roi_type,
-                        )
+            for roi in self.ohifViewer_info[roi_type]:
+                if roi.get("location") == label:
+                    data = self.fill_roi_dicom_slice(
+                        data,
+                        roi["SOPInstanceUID"],
+                        roi["handles"],
+                        dicoms=self.dicoms,
+                        roi_type=roi_type,
+                    )
 
         return data
 
@@ -361,7 +358,7 @@ class MeasurementExportFromDicom(MeasurementExport):
         else:
             label_out = re.sub("[^0-9a-zA-Z]+", "_", label)
 
-        output_filename = "ROI_" + label_out + "_" + self.file_object["name"]
+        output_filename = "ROI_" + label_out + "_" + self.file_obj["name"]
 
         if output_filename.endswith(".gz"):
             output_filename = output_filename[: -1 * len(".nii.gz")]
