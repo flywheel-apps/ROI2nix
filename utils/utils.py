@@ -67,132 +67,6 @@ class InvalidROIError(Exception):
         self.message = message
 
 
-def io_proxy_wado(
-    api_key, api_key_prefix, project_id, study=None, series=None, instance=None
-):
-    """
-    Request wrapper for io-proxy api (https://{instance}/io-proxy/docs#/).
-
-    This offers a complete indexing of the dicoms in the wado database.
-
-    Admittedly, there could be other ways to do this.
-
-    Args:
-        api_key (str): Full instance api-key
-        api_key_prefix (str): Type of user (e.g. 'scitran-user')
-        project_id (str): Project ID to inquire
-        study (str, optional): DICOM StudyUID. Defaults to None.
-        series (str, optional): DICOM SeriesUID. Defaults to None.
-        instance (str, optional): DICOM InstanceUID. Defaults to None.
-
-    Returns:
-        dict/list: A dictionary for dicom tags or a list of dictionaries with dicom tags
-    """
-    base_url = Path(api_key.split(":")[0])
-    base_url /= "io-proxy/wado"
-    base_url /= "projects/" + project_id
-    if study:
-        base_url /= "studies/" + study
-    if series:
-        base_url /= "series/" + series
-        base_url /= "instances"
-    if instance:
-        base_url /= instance
-        base_url /= "tags"
-    base_url = "https://" + str(base_url)
-
-    headers = {
-        "Authorization": api_key_prefix + " " + api_key,
-        "accept": "application/json",
-    }
-
-    req = requests.get(base_url, headers=headers)
-
-    return leval(req.text)
-
-
-def convert_ROI_to_nifti_form(
-    fw_client, project_id, file_obj, imagePath, ohifViewer_info
-):
-    """
-    Converts ohifViewer ROI from a dicom to that of an individual nifti format.
-
-    Dicom annotations occur on the session-level info and with UID-centric formatting.
-    This function places the annotations in the file_obj info with file-centric
-    formatting.
-
-    Args:
-        fw_client (flywheel.Client): The active flywheel client
-        project_id (str): The id of the project to search for io-proxy elements
-        file_obj (flywheel.File): File object data
-        imagePath (str): The DICOM representation of the ohifViewer ROI imagePath
-        ohifViewer_info (dict): The full session-level ohifViewer ROI dictionary.
-
-    Returns:
-        dict: File object (file_obj) dictionary
-        str: Returns perpendicular axis to the plane (perp_char, e.g. "x")
-    """
-    host = fw_client._fw.api_client.configuration.host[:-8]
-    api_key_prefix = fw_client._fw.api_client.configuration.api_key_prefix[
-        "Authorization"
-    ]
-    api_key_hash = fw_client._fw.api_client.configuration.api_key["Authorization"]
-    api_key = ":".join([host.split("//")[1], api_key_hash])
-
-    out_ohifViewer_info = {"measurements": {}}
-
-    study_id, series_id = imagePath.split("$$$")[:2]
-
-    # Grab metadata of all instances related to this study and series.
-    # "Could" open all the dicoms in the series to get this... but it is in a database
-    # so why not grab it from the database.
-    instances = io_proxy_wado(api_key, api_key_prefix, project_id, study_id, series_id)
-
-    for roi_type in ["FreehandRoi", "RectangleRoi", "EllipticalRoi"]:
-        if ohifViewer_info["measurements"].get(roi_type):
-            for roi in ohifViewer_info["measurements"].get(roi_type):
-                if imagePath in roi["imagePath"]:
-                    # grab the instance (slice) that roi is drawn on from the imagePath
-                    instance_id = roi["imagePath"].split("$$$")[2]
-                    # get the stored instance (SOP UID) from instances list
-                    slice_instance = [
-                        i for i in instances if i["00080018"]["Value"][0] == instance_id
-                    ][0]
-                    # (0020, 0013) Instance Number
-                    # Integer "voxel" coordinate direction of the perpendicular axis.
-                    InstanceNumber = slice_instance["00200013"]["Value"][0]
-
-                    if roi_type not in out_ohifViewer_info["measurements"].keys():
-                        out_ohifViewer_info["measurements"][roi_type] = []
-
-                    # (0020, 0037) Image Orientation Patient
-                    # Needed to determine axis perpendicular to slice
-                    ImageOrientationPatient = list(
-                        map(round, slice_instance["00200037"]["Value"])
-                    )
-                    # from https://stackoverflow.com/questions/34782409/understanding-dicom-image-attributes-to-get-axial-coronal-sagittal-cuts
-                    # https://groups.google.com/g/comp.protocols.dicom/c/GW04ODKR7Tc?pli=1
-                    if ImageOrientationPatient == [1, 0, 0, 0, 1, 0]:
-                        # Axial Slices
-                        perp_char = "z"
-                    elif ImageOrientationPatient == [0, 1, 0, 0, 0, -1]:
-                        # Sagittal Slices
-                        perp_char = "x"
-                    elif ImageOrientationPatient == [1, 0, 0, 0, 0, -1]:
-                        # Coronal Slices
-                        perp_char = "y"
-
-                    # InstanceNumber is 1-indexed, niftis are 0-indexed.
-                    roi[
-                        "imagePath"
-                    ] = f"dicom.nii.gz#{perp_char}-{InstanceNumber-1},t-0$$$0"
-                    out_ohifViewer_info["measurements"][roi_type].append(roi)
-
-    file_obj["info"].update({"ohifViewer": out_ohifViewer_info})
-
-    return file_obj, perp_char
-
-
 def poly2mask(vertex_row_coords, vertex_col_coords, shape):
     """
     poly2mask converts polygon vertex coordinates into a filled polygon
@@ -346,6 +220,108 @@ def ellipse2mask(start, end, shape, axes_flips, swap_axes=False):
     mask[fill_row_coords, fill_col_coords] = True
 
     return mask
+
+
+
+def gather_ROI_info(file_obj):
+    """
+    gather_ROI_info extracts label-name along with bitmasked index and RGBA
+        color code for each distinct label in the ROI collection.
+
+    Args:
+        file_obj (flywheel.models.file.File): The flywheel file-object with
+            ROI data contained within the `.info.ROI` metadata.
+
+    Returns:
+        OrderedDict: the label object populated with ROI attributes
+    """
+
+    # dictionary for labels, index, R, G, B, A
+    labels = OrderedDict()
+
+    # React OHIF Viewer
+    if (
+        "ohifViewer" in file_obj["info"].keys()
+        and "measurements" in file_obj["info"]["ohifViewer"]
+    ):
+        if (
+            ("FreehandRoi" in file_obj["info"]["ohifViewer"]["measurements"])
+            or ("RectangleRoi" in file_obj["info"]["ohifViewer"]["measurements"])
+            or ("EllipticalRoi" in file_obj["info"]["ohifViewer"]["measurements"])
+        ):
+            roi_list = []
+            for roi_type in ["FreehandRoi", "RectangleRoi", "EllipticalRoi"]:
+                roi_type_list = file_obj["info"]["ohifViewer"]["measurements"].get(
+                    roi_type
+                )
+                if roi_type_list:
+                    roi_list.extend(roi_type_list)
+
+            for roi in roi_list:
+                if roi.get("location"):
+                    if roi["location"] not in labels.keys():
+                        labels[roi["location"]] = {
+                            "index": int(2 ** (len(labels))),
+                            # Colors are not yet defined so just use this
+                            "color": "fbbc05",
+                            "RGB": [int("fbbc05"[i : i + 2], 16) for i in [1, 3, 5]],
+                        }
+                else:
+                    log.warning(
+                        "There is an ROI without a label. To include this ROI in the "
+                        "output, please attach a label."
+                    )
+    # only doing this for toolType=freehand for Meteor (legacy) OHIF Viewer
+    # Deprioritizing OHIF Meteor Annotations
+    # ROI2Nix will not do both at the same time
+    # TODO: Deprecate OHIF Meteor functionality
+    elif "roi" in file_obj["info"].keys():
+        for roi in file_obj["info"]["roi"]:
+            if (
+                roi.get("label")
+                and (roi["toolType"] == "freehand")
+                and (roi["label"] not in labels.keys())
+            ):
+                # Only if annotation type is a polygon, then grab the
+                # label, create a 2^x index for bitmasking, grab the color
+                # hash (e.g. #fbbc05), and translate it into RGB
+                labels[roi["label"]] = {
+                    "index": int(2 ** (len(labels))),
+                    "color": roi["color"],
+                    "RGB": [int(roi["color"][i : i + 2], 16) for i in [1, 3, 5]],
+                }
+    else:
+        log.warning("No ROIs were found for this image.")
+
+    if len(labels) > 63:
+        log.warning(
+            "Due to the maximum integer length (64 bits), we can "
+            "only keep track of a maximum of 63 ROIs with a bitmasked "
+            "combination. You have %i ROIs.",
+            len(labels),
+        )
+
+    return labels
+
+
+def calculate_ROI_volume(labels, affine):
+    """
+    calculate_ROI_volume calculates the number of voxels and volume in each of
+        the ROIs
+
+    Args:
+        labels (OrderedDict): The dictionary containing ROI info
+        data (numpy.ndarray): The NIfTI data with ROI within
+    """
+    if len(labels) > 0:
+        for _, label_object in labels.items():
+            label_object.calc_volume(affine)
+            # indx = label_dict["index"]
+            # label_data = np.bitwise_and(data, indx)
+            # voxels = np.sum(label_data > 0)
+            # label_dict["voxels"] = voxels
+            # volume = voxels * np.abs(np.linalg.det(affine[:3, :3]))
+            # label_dict["volume"] = volume  # mm^3
 
 
 def output_ROI_info(context, labels):
