@@ -26,7 +26,7 @@ def main(context):
         file_input = context.get_input("Input_File")
         # Need updated file information.
         file_obj = file_input["object"]
-        file_obj = fw_client.get_file(file_obj['object']['file_id'])
+        file_obj = fw_client.get_file(file_obj["file_id"])
 
         destination_type = "nrrd" if config.get("save_NRRD") else "nifti"
 
@@ -61,19 +61,18 @@ def main(context):
         # Output csv file with ROI index, label, num of voxels, and ROI volume
         output_ROI_info(context, exporter.labels)
 
-
         # # Write Slicer color table file .cbtl
         if config["save_slicer_color_table"]:
             write_3D_Slicer_CTBL(context, file_input, exporter.labels)
 
     except Exception as e:
-        context.log.exception(e)
-        context.log.fatal(
+        log.exception(e)
+        log.fatal(
             "Error executing roi2nix.",
         )
         return 1
 
-    context.log.info("roi2nix completed Successfully!")
+    log.info("roi2nix completed Successfully!")
     return 0
 
 
