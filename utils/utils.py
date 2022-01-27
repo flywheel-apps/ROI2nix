@@ -42,6 +42,7 @@ class InvalidDICOMFile(Exception):
         Exception.__init__(self)
         self.message = message
 
+
 class InvalidConversion(Exception):
     """Exception raised when a conversion cannot be done (nifti to dicom, nifti to nrrd).
 
@@ -53,6 +54,7 @@ class InvalidConversion(Exception):
     def __init__(self, message):
         Exception.__init__(self)
         self.message = message
+
 
 class InvalidROIError(Exception):
     """Exception raised when session ROI data is invalid.
@@ -222,7 +224,6 @@ def ellipse2mask(start, end, shape, axes_flips, swap_axes=False):
     return mask
 
 
-
 def gather_ROI_info(file_obj):
     """
     gather_ROI_info extracts label-name along with bitmasked index and RGBA
@@ -357,11 +358,23 @@ def write_3D_Slicer_CTBL(context, file_input, labels):
         file_input (flywheel.models.file.File): Input file with metadata
         labels (OrderedDict): Ordered dictionary of ROI label attributes
     """
+
+    output_filename = file_input["location"]["name"]
+
+    if output_filename.endswith(".gz"):
+        output_filename = output_filename[: -1 * len(".nii.gz")]
+    elif output_filename.endswith(".nii"):
+        output_filename = output_filename[: -1 * len(".nii")]
+    elif output_filename.endswith(".dicom.zip"):
+        output_filename = output_filename[: -1 * len(".dicom.zip")]
+    elif output_filename.endswith(".zip"):
+        output_filename = output_filename[: -1 * len(".zip")]
+
     if len(labels) > 0:
         ctbl = open(
             op.join(
                 context.output_dir,
-                "ROI_ALL_labels_" + file_input["location"]["name"][:-7] + ".ctbl",
+                "ROI_ALL_labels_" + output_filename + ".ctbl",
             ),
             "w",
         )

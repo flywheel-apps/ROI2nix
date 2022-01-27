@@ -50,10 +50,12 @@ class MeasurementExport(ABC):
         self.dtype = np.uint8
         self.bits = 8
         self.labels = {}  # A list of all measurement label names for this dicom
-        self.affine = np.eye(3) # A numpy matrix of the image's affine
+        self.affine = np.eye(3)  # A numpy matrix of the image's affine
 
         if (orig_file_type, dest_file_type) in [("nifti", "nrrd"), ("nifti", "dicom")]:
-            raise InvalidConversion(f"Cannot convert from {orig_file_type} to {dest_file_type}")
+            raise InvalidConversion(
+                f"Cannot convert from {orig_file_type} to {dest_file_type}"
+            )
 
         self.class_setup()
 
@@ -152,7 +154,7 @@ class MeasurementExportFromDicom(MeasurementExport):
                         label=roi["location"],
                         index=label_index,
                         color="fbbc05",
-                        RGB=[int("fbbc05"[i : i + 2], 16) for i in [1, 3, 5]]
+                        RGB=[int("fbbc05"[i : i + 2], 16) for i in [1, 3, 5]],
                     )
             else:
                 log.warning(
@@ -197,15 +199,20 @@ class MeasurementExportFromDicom(MeasurementExport):
 
     def get_affine(self):
 
-        positions = np.mat([loaded_dicom.ImagePositionPatient for loaded_dicom in self.dicoms])
+        positions = np.mat(
+            [loaded_dicom.ImagePositionPatient for loaded_dicom in self.dicoms]
+        )
         zdif = np.diff(positions, axis=0)[:, 0]
         mzdif = stats.mode(zdif).mode[0][0]
         mzdif = np.round(mzdif, 4)
         ds = self.dicoms[0]
-        self.affine = np.mat([[1 * mzdif, 0, 0],
-                                       [0, 1 * ds.PixelSpacing[0], 0],
-                                       [0, 0, 1 * ds.PixelSpacing[1]]])
-
+        self.affine = np.mat(
+            [
+                [1 * mzdif, 0, 0],
+                [0, 1 * ds.PixelSpacing[0], 0],
+                [0, 0, 1 * ds.PixelSpacing[1]],
+            ]
+        )
 
     def move_dicoms_to_workdir(self):
         # if archived, unzip dicom into work/dicom/
@@ -429,9 +436,6 @@ class MeasurementExportFromDicom(MeasurementExport):
 
         pr = sp.Popen(command)
         pr.wait()
-
-    def copy_nii_to_output(self):
-        pass
 
     @staticmethod
     def fill_roi_dicom_slice(

@@ -8,7 +8,7 @@
     "url": "",
     "source": "https://github.com/flywheel-apps/ROI2nix",
     "cite": "",
-    "version": "0.4.0_alpha3",
+    "version": "0.4.0_alpha",
     "custom": {
         "docker-image": "flywheel/roi2nix:0.4.0",
         "gear-builder": {
@@ -34,7 +34,7 @@
     },
     "config": {
         "save_NRRD": {
-            "default": true,
+            "default": false,
             "description": "Saves the ROI's as output Type NRRD instead of Nifti.  Default False",
             "type": "boolean"
         },
