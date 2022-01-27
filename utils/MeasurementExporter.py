@@ -13,6 +13,8 @@ import numpy as np
 import utils.utils as utils
 import re
 import subprocess as sp
+from utils.Labels import RoiLabel
+from scipy import stats
 
 log = logging.getLogger(__name__)
 
@@ -44,6 +46,8 @@ class MeasurementExport(ABC):
         self.output_dir = output_dir
         self.dtype = np.uint8
         self.bits = 8
+        self.labels = {}  # A list of all measurement label names for this dicom
+        self.affine = np.eye(3) # A numpy matrix of the image's affine
 
         if (orig_file_type, dest_file_type) in [("nifti", "nrrd"), ("nifti", "dicom")]:
             raise InvalidConversion(f"Cannot convert from {orig_file_type} to {dest_file_type}")
@@ -88,7 +92,6 @@ class MeasurementExportFromDicom(MeasurementExport):
         self.studyInstanceUid = None  # study instance uid of the current dicom
         self.seriesInstanceUid = None  # series instance uid of the current dicom
         self.output_dicom_dir = None  # ouput directory for converted dicoms
-        self.labels = []  # A list of all measurement label names for this dicom
         self.shape = ()  # The shape of the data matrix that will have ROI's put on it.
 
         self.project_id = self.file_obj.parents["project"]
@@ -107,15 +110,31 @@ class MeasurementExportFromDicom(MeasurementExport):
             error_message = "Session info is missing ROI data for selected DICOM file."
             raise InvalidROIError(error_message)
 
+    def get_affine(self):
+
+        positions = np.mat([loaded_dicom.ImagePositionPatient for loaded_dicom in self.dicoms])
+        zdif = np.diff(positions, axis=0)[:, 0]
+        mzdif = stats.mode(zdif).mode[0][0]
+        mzdif = np.round(mzdif, 4)
+        ds = self.dicoms[0]
+        self.affine = np.mat([[1 * mzdif, 0, 0],
+                                       [0, 1 * ds.PixelSpacing[0], 0],
+                                       [0, 0, 1 * ds.PixelSpacing[1]]])
 
     def prep_data(self):
-        # need studyInstanceUid and seriesInstanceUid from DICOM series to select
-        # appropriate records from the Session-level OHIF viewer annotations:
-        # e.g. session.info.ohifViewer.measurements.EllipticalRoi[0].imagePath =
-        #   studyInstanceUid$$$seriesInstanceUid$$$sopInstanceUid$$$0
+        self.move_dicoms_to_workdir()
+        self.get_current_study_series_uid()
+        self.copy_dicoms_for_export()
+        self.identify_rois_on_image()
+        self.get_dicoms()
+        self.get_affine()
 
+
+    def move_dicoms_to_workdir(self):
         # if archived, unzip dicom into work/dicom/
         self.orig_dicom_dir = self.work_dir / "dicom"
+        self.output_dicom_dir = self.work_dir / "converted_dicom"
+
         self.orig_dicom_dir.mkdir(parents=True, exist_ok=True)
         if self.input_file_path.as_posix().endswith(".zip"):
             # Unzip, pulling any nested files to a top directory.
@@ -134,6 +153,11 @@ class MeasurementExportFromDicom(MeasurementExport):
         else:
             shutil.copy(self.input_file_path, self.orig_dicom_dir)
 
+    def get_current_study_series_uid(self):
+        # need studyInstanceUid and seriesInstanceUid from DICOM series to select
+        # appropriate records from the Session-level OHIF viewer annotations:
+        # e.g. session.info.ohifViewer.measurements.EllipticalRoi[0].imagePath =
+        #   studyInstanceUid$$$seriesInstanceUid$$$sopInstanceUid$$$0
         # open one dicom file to extract studyInstanceUid and seriesInstanceUid
         # If this was guaranteed to be a part of the dicom-file metadata, we could grab it
         # from there. No guarantees. But all the tags are in the WADO database...
@@ -158,7 +182,7 @@ class MeasurementExportFromDicom(MeasurementExport):
             error_message = "An invalid dicom file was encountered."
             raise InvalidDICOMFile(error_message)
 
-        self.output_dicom_dir = self.work_dir / "converted_dicom"
+    def copy_dicoms_for_export(self):
         # convert dicom to nifti (work/dicom.nii.gz)
         try:
             # Copy dicoms to a new directory
@@ -174,6 +198,7 @@ class MeasurementExportFromDicom(MeasurementExport):
             )
             raise InvalidDICOMFile(error_message)
 
+    def identify_rois_on_image(self):
         imagePath = f"{self.studyInstanceUid}$$${self.seriesInstanceUid}$$$"
         # check for imagePath in ohifViewer info
         if imagePath not in str(self.ohifViewer_info):
@@ -212,23 +237,27 @@ class MeasurementExportFromDicom(MeasurementExport):
         else:
             log.error("Found NO ROI labels")
 
-        self.get_dicoms()
+
 
         # Check save_single_ROIs
         # TODO: There should also be an extra section here for binary vs bitmask.  Currently only binary is implemented
-        for label in self.labels:
-            data = self.label2data(label)
+        for label_name, label_object in self.labels.items():
+
+            data = self.label2data(label_name)
             # data *= self.labels[label]["index"]
+            label_object.num_voxels = np.count_nonzero(data)
+
             data = data.astype(self.dtype)
             self.convert_working_dir(data)
-            self.save_working_dir(label)
+            self.save_working_dir(label_name)
+
 
         if self.combine:
             data = np.zeros(self.shape, dtype=self.dtype)
             for label in self.labels:
                 label_data = self.label2data(label)
                 label_data = label_data.astype(self.dtype)
-                label_data *= self.labels[label]["index"]
+                label_data *= self.labels[label].index
                 data += label_data
 
             self.convert_working_dir(data)
@@ -260,12 +289,12 @@ class MeasurementExportFromDicom(MeasurementExport):
         for roi in roi_list:
             if roi.get("location"):
                 if roi["location"] not in labels.keys():
-                    labels[roi["location"]] = {
-                        "index": int(2 ** (len(labels))),
-                        # Colors are not yet defined so just use this
-                        "color": "fbbc05",
-                        "RGB": [int("fbbc05"[i : i + 2], 16) for i in [1, 3, 5]],
-                    }
+                    labels[roi["location"]] = RoiLabel(
+                        label=roi["location"],
+                        index=int(2 ** (len(labels))),
+                        color="fbbc05",
+                        RGB=[int("fbbc05"[i : i + 2], 16) for i in [1, 3, 5]]
+                    )
             else:
                 log.warning(
                     "There is an ROI without a label. To include this ROI in the "
@@ -376,6 +405,8 @@ class MeasurementExportFromDicom(MeasurementExport):
                 self.output_dir,
                 "-f",
                 output_filename,
+                "-b",
+                "n",
                 self.output_dicom_dir,
             ]
         elif self.dest_file_type == "nrrd":
@@ -387,6 +418,8 @@ class MeasurementExportFromDicom(MeasurementExport):
                 output_filename,
                 "-e",
                 "y",
+                "-b",
+                "n",
                 self.output_dicom_dir,
             ]
 
@@ -456,3 +489,20 @@ class MeasurementExportFromDicom(MeasurementExport):
         data[:, :, slice] = orientation_slice
 
         return data
+
+
+class MeasurementExportFromNifti(MeasurementExport):
+    def class_setup(self):
+        """additional class setup stuff"""
+        pass
+
+    def prep_data(self):
+        """does and prepwork needed to the data"""
+        pass
+
+    def make_data(self):
+        pass
+
+    def get_labels(self):
+        """Gets all the labels associated with this particular dicom"""
+        pass

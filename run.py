@@ -55,15 +55,15 @@ def main(context):
 
         # #
         # # Calculate the voxel and volume of each ROI by label
-        # calculate_ROI_volume(labels, data, nii.affine)
+        calculate_ROI_volume(exporter.labels, exporter.affine)
         #
-        # # Output csv file with ROI index, label, num of voxels, and ROI volume
-        # output_ROI_info(context, labels)
-        #
+        # Output csv file with ROI index, label, num of voxels, and ROI volume
+        output_ROI_info(context, exporter.labels)
+
 
         # # Write Slicer color table file .cbtl
-        # if config["save_slicer_color_table"]:
-        #     write_3D_Slicer_CTBL(context, file_input, labels)
+        if config["save_slicer_color_table"]:
+            write_3D_Slicer_CTBL(context, file_input, exporter.labels)
 
     except Exception as e:
         context.log.exception(e)

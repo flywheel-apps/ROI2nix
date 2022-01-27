@@ -1,7 +1,8 @@
-flywheel-sdk==14.6.2
-flywheel-gear-toolkit==0.1.4
+flywheel-sdk==15.8.0
+flywheel-gear-toolkit==0.3.1
 nibabel==3.2.1
 scikit-image==0.18.1
 pydicom==2.1.2
 dcmpi==0.0.2.8
 pynrrd==0.4.2
+scipy
