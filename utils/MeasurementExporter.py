@@ -29,6 +29,7 @@ class MeasurementExport(ABC):
         orig_file_type,
         dest_file_type,
         combine,
+        bitmask,
         file_object,
         work_dir,
         output_dir,
@@ -39,11 +40,13 @@ class MeasurementExport(ABC):
         self.dest_file_type = dest_file_type
         self.fw_client = fw_client
         self.combine = combine
+        self.bitmask = bitmask
         self.ohifViewer_info = {}
         self.file_obj = file_object
         self.validROIs = ["RectangleRoi", "EllipticalRoi", "FreehandRoi"]
         self.work_dir = work_dir
         self.output_dir = output_dir
+        ################# End of user input ######################
         self.dtype = np.uint8
         self.bits = 8
         self.labels = {}  # A list of all measurement label names for this dicom
@@ -94,7 +97,7 @@ class MeasurementExportFromDicom(MeasurementExport):
         self.output_dicom_dir = None  # ouput directory for converted dicoms
         self.shape = ()  # The shape of the data matrix that will have ROI's put on it.
 
-        self.project_id = self.file_obj.parents["project"]
+        self.project_id = self.file_obj["parents"]["project"]
         # Prioritize dicom file-level ROI annotations
         #   -- if they should occur this way soon...
         #   -- dicom annotations are currently on session-level info.
@@ -103,12 +106,94 @@ class MeasurementExportFromDicom(MeasurementExport):
 
         else:
             # session stores the OHIF annotations
-            session = self.fw_client.get(self.file_obj.parents["session"])
+            session = self.fw_client.get(self.file_obj["parents"]["session"])
             self.ohifViewer_info = session.info.get("ohifViewer")
 
         if not self.ohifViewer_info:
             error_message = "Session info is missing ROI data for selected DICOM file."
             raise InvalidROIError(error_message)
+
+    def prep_data(self):
+        self.move_dicoms_to_workdir()
+        self.get_current_study_series_uid()
+        self.copy_dicoms_for_export()
+        self.identify_rois_on_image()
+        self.get_dicoms()
+        self.get_affine()
+
+    def get_labels(self):
+        """
+        gather_ROI_info extracts label-name along with bitmasked index and RGBA
+            color code for each distinct label in the ROI collection.
+
+        Args:
+            file_obj (flywheel.models.file.File): The flywheel file-object with
+                ROI data contained within the `.info.ROI` metadata.
+
+        Returns:
+            OrderedDict: the label object populated with ROI attributes
+        """
+
+        # dictionary for labels, index, R, G, B, A
+        labels = OrderedDict()
+
+        # React OHIF Viewer
+        roi_list = [
+            individual_value
+            for roi_list in self.ohifViewer_info.values()
+            for individual_value in roi_list
+        ]
+
+        for roi in roi_list:
+            if roi.get("location"):
+                if roi["location"] not in labels.keys():
+                    label_index = int(2 ** (len(labels)))
+                    labels[roi["location"]] = RoiLabel(
+                        label=roi["location"],
+                        index=label_index,
+                        color="fbbc05",
+                        RGB=[int("fbbc05"[i : i + 2], 16) for i in [1, 3, 5]]
+                    )
+            else:
+                log.warning(
+                    "There is an ROI without a label. To include this ROI in the "
+                    "output, please attach a label."
+                )
+        self.labels = labels
+
+    def make_data(self):
+
+        self.set_bit_level()
+
+        len_labels = len(self.labels)
+        if len_labels > 0:
+            log.info("Found %s ROI labels", len_labels)
+        else:
+            log.error("Found NO ROI labels")
+
+        # Check save_single_ROIs
+        # TODO: There should also be an extra section here for binary vs bitmask.  Currently only binary is implemented
+        for label_name, label_object in self.labels.items():
+            data = self.label2data(label_name)
+
+            label_object.num_voxels = np.count_nonzero(data)
+            data = data.astype(self.dtype)
+            if self.bitmask:
+                data *= self.labels[label_name].index
+
+            self.convert_working_dir(data)
+            self.save_working_dir(label_name)
+
+        if self.combine:
+            data = np.zeros(self.shape, dtype=self.dtype)
+            for label in self.labels:
+                label_data = self.label2data(label)
+                label_data = label_data.astype(self.dtype)
+                label_data *= self.labels[label].index
+                data += label_data
+
+            self.convert_working_dir(data)
+            self.save_working_dir(combined=True)
 
     def get_affine(self):
 
@@ -120,14 +205,6 @@ class MeasurementExportFromDicom(MeasurementExport):
         self.affine = np.mat([[1 * mzdif, 0, 0],
                                        [0, 1 * ds.PixelSpacing[0], 0],
                                        [0, 0, 1 * ds.PixelSpacing[1]]])
-
-    def prep_data(self):
-        self.move_dicoms_to_workdir()
-        self.get_current_study_series_uid()
-        self.copy_dicoms_for_export()
-        self.identify_rois_on_image()
-        self.get_dicoms()
-        self.get_affine()
 
 
     def move_dicoms_to_workdir(self):
@@ -229,102 +306,30 @@ class MeasurementExportFromDicom(MeasurementExport):
         # Now the info here only has ROI's related to this particular dicom.
         self.ohifViewer_info = new_ohif_measurements
 
-    def make_data(self):
-
-        len_labels = len(self.labels)
-        if len_labels > 0:
-            log.info("Found %s ROI labels", len_labels)
-        else:
-            log.error("Found NO ROI labels")
-
-
-
-        # Check save_single_ROIs
-        # TODO: There should also be an extra section here for binary vs bitmask.  Currently only binary is implemented
-        for label_name, label_object in self.labels.items():
-
-            data = self.label2data(label_name)
-            # data *= self.labels[label]["index"]
-            label_object.num_voxels = np.count_nonzero(data)
-
-            data = data.astype(self.dtype)
-            self.convert_working_dir(data)
-            self.save_working_dir(label_name)
-
-
-        if self.combine:
-            data = np.zeros(self.shape, dtype=self.dtype)
-            for label in self.labels:
-                label_data = self.label2data(label)
-                label_data = label_data.astype(self.dtype)
-                label_data *= self.labels[label].index
-                data += label_data
-
-            self.convert_working_dir(data)
-            self.save_working_dir(combined=True)
-
-    def get_labels(self):
-        """
-        gather_ROI_info extracts label-name along with bitmasked index and RGBA
-            color code for each distinct label in the ROI collection.
-
-        Args:
-            file_obj (flywheel.models.file.File): The flywheel file-object with
-                ROI data contained within the `.info.ROI` metadata.
-
-        Returns:
-            OrderedDict: the label object populated with ROI attributes
-        """
-
-        # dictionary for labels, index, R, G, B, A
-        labels = OrderedDict()
-
-        # React OHIF Viewer
-        roi_list = [
-            individual_value
-            for roi_list in self.ohifViewer_info.values()
-            for individual_value in roi_list
-        ]
-
-        for roi in roi_list:
-            if roi.get("location"):
-                if roi["location"] not in labels.keys():
-                    labels[roi["location"]] = RoiLabel(
-                        label=roi["location"],
-                        index=int(2 ** (len(labels))),
-                        color="fbbc05",
-                        RGB=[int("fbbc05"[i : i + 2], 16) for i in [1, 3, 5]]
-                    )
-            else:
-                log.warning(
-                    "There is an ROI without a label. To include this ROI in the "
-                    "output, please attach a label."
-                )
-
-        if self.combine:
+    def set_bit_level(self):
+        # If we're not combining and binary masks are ok, we don't need to bitmask, we'll leave at default 8 bit
+        if self.combine or self.bitmask:
             if self.dest_file_type == "dicom":
                 max_labels = 31
             else:
                 max_labels = 63
 
-            if len(labels) < 8:
+            if len(self.labels) < 8:
                 self.dtype = np.uint8
                 self.bits - 8
-            elif len(labels) < 16:
+            elif len(self.labels) < 16:
                 self.dtype = np.uint16
                 self.bits = 16
-            elif len(labels) < 32:
+            elif len(self.labels) < 32:
                 self.dtype = np.uint32
                 self.bits = 32
 
-            elif len(labels) > max_labels:
+            elif len(self.labels) > max_labels:
                 log.warning(
                     f"Due to the maximum integer length ({max_labels+1} bits), we can "
                     f"only keep track of a maximum of {max_labels} ROIs with a bitmasked "
-                    f"combination. You have {len(labels)} ROIs."
+                    f"combination. You have {len(self.labels)} ROIs."
                 )
-
-        self.labels = labels
 
     def get_dicoms(self):
         # Acquire ROI data
@@ -341,7 +346,6 @@ class MeasurementExportFromDicom(MeasurementExport):
         ]
         self.dicoms = dicoms
         self.dicom_files = dicom_files
-
 
     def label2data(self, label):
         data = np.zeros(self.shape, dtype=np.bool)

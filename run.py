@@ -8,7 +8,6 @@ import sys
 
 from utils.MeasurementExporter import MeasurementExportFromDicom as DicomExporter
 from utils.utils import (
-    convert_dicom_to_nifti,
     calculate_ROI_volume,
     output_ROI_info,
     write_3D_Slicer_CTBL,
@@ -27,6 +26,7 @@ def main(context):
         file_input = context.get_input("Input_File")
         # Need updated file information.
         file_obj = file_input["object"]
+        file_obj = fw_client.get_file(file_obj['object']['file_id'])
 
         destination_type = "nrrd" if config.get("save_NRRD") else "nifti"
 
@@ -46,6 +46,7 @@ def main(context):
                 orig_file_type="dicom",
                 dest_file_type=destination_type,
                 combine=config.get("save_combined_output", False),
+                bitmask=not config.get("save_binary_masks", True),
                 file_object=file_obj,
                 work_dir=context.work_dir,
                 output_dir=context.output_dir,
