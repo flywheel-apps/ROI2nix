@@ -340,7 +340,7 @@ class MeasurementExportFromDicom(MeasurementExport):
 
     def get_dicoms(self):
         # Acquire ROI data
-        globdir = self.orig_dicom_dir / "*.dcm"
+        globdir = self.orig_dicom_dir / "*"
         dicom_files = glob.glob(globdir.as_posix())
         dicom_files.sort()
         dicom_files = [Path(d) for d in dicom_files]
