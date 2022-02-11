@@ -20,21 +20,49 @@ from scipy import stats
 log = logging.getLogger(__name__)
 
 
+"""
+Preppers - 
+Process 1 of 4
+these are designed to prepare any local data for roi creation.  
+This typically means the following:
+    1. copy the original data (nifti or dicom) to a "working" directory.
+    (/flywheel/v0/work/original_image)
+    2. create a second copy of the original data into an "roi" directory
+    (/flywheel/v0/work/roi_image)
+    
+    For dicoms, this means either unzipping a zipped file or copying in a full
+    directory.  For niftis this will mean just copying the file.
+    
+    The "roi" image will later be modified directly to create the ROI's
+    
+Responsibilities:
+1. prepare an "original" working directory with a copy of the data
+2. prepare an "roi" working directory with a copy of the data
+    
+Full process:
+1. Prep
+2. Collect
+3. Generate
+4. Convert
+
+"""
+
 
 @dataclass
-class Prepper():
+class Prepper:
     work_dir: Path
     input_file_path: Path
-    prepper: PrepWorker: None
+    prepper: PrepWorker = None
 
     def __post_init__(self):
         self.output_dir = self.work_dir / "roi_image"
         self.orig_dir = self.work_dir / "original_image"
-        self.prepper = self.prepper(self.orig_dir, self.output_dir, self.input_file_path)
+        self.prepper = self.prepper(
+            self.orig_dir, self.output_dir, self.input_file_path
+        )
 
-    def prep_data(self):
+    def prep(self):
         self.prepper.prep()
-
 
 
 class PrepWorker(ABC):
@@ -49,7 +77,6 @@ class PrepWorker(ABC):
 
 
 class PrepDicom(PrepWorker):
-
     def prep(self):
         """
         For the dicom prepper, this does the following:
@@ -61,10 +88,6 @@ class PrepDicom(PrepWorker):
 
         """
         self.move_dicoms_to_workdir()
-
-        # This is actually not needed for this prep part, it's for making the image:
-        studyUID, seriesUID = self.get_current_study_series_uid()
-
         self.copy_dicoms_for_export()
 
     def move_dicoms_to_workdir(self):
@@ -86,37 +109,6 @@ class PrepDicom(PrepWorker):
             # dicom_zip.extractall(path=dicom_dir)
         else:
             shutil.copy(self.input_file_path, self.orig_dir)
-
-    def get_current_study_series_uid(self):
-        # need studyInstanceUid and seriesInstanceUid from DICOM series to select
-        # appropriate records from the Session-level OHIF viewer annotations:
-        # e.g. session.info.ohifViewer.measurements.EllipticalRoi[0].imagePath =
-        #   studyInstanceUid$$$seriesInstanceUid$$$sopInstanceUid$$$0
-        # open one dicom file to extract studyInstanceUid and seriesInstanceUid
-        # If this was guaranteed to be a part of the dicom-file metadata, we could grab it
-        # from there. No guarantees. But all the tags are in the WADO database...
-        dicom = None
-        for root, _, files in os.walk(str(self.orig_dir), topdown=False):
-            for fl in files:
-                try:
-                    dicom_path = Path(root) / fl
-                    dicom = pydicom.read_file(dicom_path, force=True)
-                    break
-                except Exception as e:
-                    log.warning("Could not open dicom file. Trying another.")
-                    log.exception(e)
-                    pass
-            if dicom:
-                break
-
-        if dicom:
-            studyInstanceUid = dicom.StudyInstanceUID
-            seriesInstanceUid = dicom.SeriesInstanceUID
-        else:
-            error_message = "An invalid dicom file was encountered."
-            raise InvalidDICOMFile(error_message)
-
-        return studyInstanceUid, seriesInstanceUid
 
     def copy_dicoms_for_export(self):
         try:

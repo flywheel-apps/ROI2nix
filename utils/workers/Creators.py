@@ -13,6 +13,7 @@ import numpy as np
 import utils.utils as utils
 import re
 from utils.objects.Labels import RoiLabel
+import utils.workers.Converters
 
 log = logging.getLogger(__name__)
 
@@ -49,11 +50,23 @@ class Creator:
     bitmask: bool
     output_dir: Path
     base_file_name: str
-    labels: dict = {}
     creator: CreateWorker = None
-    converter: Converters.Converter = None
+    convertworker: Converters.ConvertWorker = None
+    labels: dict = {}
+    converter: Converters.Converter = Converters.Converter
+
 
     def __post_init__(self):
+
+        self.converter = self.converter(orig_dir=self.orig_dir,
+        roi_dir=self.roi_dir,
+        combine=self.combine,
+        bitmask=self.bitmask,
+        output_dir=self.output_dir,
+        labels=self.labels,
+        converter=self.convertworker)
+
+
         self.creator = self.creator(
             self.orig_dir,
             self.roi_dir,
@@ -129,7 +142,7 @@ class CreateWorker(ABC):
         pass
 
 
-class Generate_From_Dicom(GenWorker):
+class DicomCreator(CreateWorker):
     def __init__(self):
         super().__init__()
         self.dicoms = {}
@@ -326,3 +339,7 @@ class Generate_From_Dicom(GenWorker):
         data[:, :, slice] = orientation_slice
 
         return data
+
+
+class NiftiCreator(CreateWorker):
+    pass
