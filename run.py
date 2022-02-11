@@ -83,3 +83,6 @@ if __name__ == "__main__":
 
     log.info("exit_status is %s", exit_status)
     os.sys.exit(exit_status)
+
+
+def test_main():

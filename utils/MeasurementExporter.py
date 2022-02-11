@@ -1,20 +1,8 @@
-from dataclasses import dataclass
 from abc import ABC, abstractmethod
-from pathlib import Path
-from utils.utils import InvalidConversion, InvalidDICOMFile, InvalidROIError
-from zipfile import ZipFile
-import os
-import shutil
 import logging
-import pydicom
-from collections import OrderedDict
-import glob
-import numpy as np
-import utils.utils as utils
-import re
-import subprocess as sp
-from utils.Labels import RoiLabel
-from scipy import stats
+from utils.objects.Files import FileObject
+from utils.objects import Conversion
+import utils.workers as workers
 
 log = logging.getLogger(__name__)
 
@@ -25,492 +13,168 @@ class MeasurementExport(ABC):
     def __init__(
         self,
         fw_client,
+        fw_file,
+        work_dir,
+        output_dir,
         input_file_path,
-        orig_file_type,
         dest_file_type,
         combine,
         bitmask,
-        file_object,
-        work_dir,
-        output_dir,
+        method,
     ):
-        self.input_file_path = Path(input_file_path)
-        self.identifier = {}
-        self.orig_file_type = orig_file_type
-        self.dest_file_type = dest_file_type
-        self.fw_client = fw_client
-        self.combine = combine
-        self.bitmask = bitmask
-        self.ohifViewer_info = {}
-        self.file_obj = file_object
-        self.validROIs = ["RectangleRoi", "EllipticalRoi", "FreehandRoi"]
-        self.work_dir = work_dir
-        self.output_dir = output_dir
-        ################# End of user input ######################
-        self.dtype = np.uint8
-        self.bits = 8
-        self.labels = {}  # A list of all measurement label names for this dicom
-        self.affine = np.eye(3)  # A numpy matrix of the image's affine
 
-        if (orig_file_type, dest_file_type) in [("nifti", "nrrd"), ("nifti", "dicom")]:
-            raise InvalidConversion(
-                f"Cannot convert from {orig_file_type} to {dest_file_type}"
-            )
+        self.file_object = FileObject(input_file_path, fw_file)
+        self.orig_file_type = self.file_object.file_type
 
-        self.class_setup()
-
-    @abstractmethod
-    def class_setup(self):
-        """additional class setup stuff"""
-        pass
-
-    @abstractmethod
-    def prep_data(self):
-        """does and prepwork needed to the data"""
-        pass
-
-    @abstractmethod
-    def make_data(self):
-        pass
-
-    @abstractmethod
-    def get_labels(self):
-        """Gets all the labels associated with this particular dicom"""
-        pass
-
-    def process_file(self):
-        self.prep_data()
-        self.get_labels()
-        self.make_data()
-
-
-class MeasurementExportFromDicom(MeasurementExport):
-    def class_setup(self):
-
-        self.dicom_files = (
-            []
-        )  # A list of all the paths to individual dicom files.  Matches list order of self.dicoms
-        self.dicoms = []  # Will be a list of opened dicom files (read by pydicom)
-        self.orig_dicom_dir = (
-            None  # will be the working directory that dicoms are extracted/coppied to
+        self.conversion = self.generate_conversion(
+            self.file_object.file_type, dest_file_type, method
         )
-        self.studyInstanceUid = None  # study instance uid of the current dicom
-        self.seriesInstanceUid = None  # series instance uid of the current dicom
-        self.output_dicom_dir = None  # ouput directory for converted dicoms
-        self.shape = ()  # The shape of the data matrix that will have ROI's put on it.
-
-        self.project_id = self.file_obj["parents"]["project"]
-        # Prioritize dicom file-level ROI annotations
-        #   -- if they should occur this way soon...
-        #   -- dicom annotations are currently on session-level info.
-        if self.file_obj.get("info") and self.file_obj["info"].get("ohifViewer"):
-            self.ohifViewer_info = self.file_obj["info"].get("ohifViewer")
-
-        else:
-            # session stores the OHIF annotations
-            session = self.fw_client.get(self.file_obj["parents"]["session"])
-            self.ohifViewer_info = session.info.get("ohifViewer")
-
-        if not self.ohifViewer_info:
-            error_message = "Session info is missing ROI data for selected DICOM file."
-            raise InvalidROIError(error_message)
-
-    def prep_data(self):
-        self.move_dicoms_to_workdir()
-        self.get_current_study_series_uid()
-        self.copy_dicoms_for_export()
-        self.identify_rois_on_image()
-        self.get_dicoms()
-        self.get_affine()
-
-    def get_labels(self):
-        """
-        gather_ROI_info extracts label-name along with bitmasked index and RGBA
-            color code for each distinct label in the ROI collection.
-
-        Args:
-            file_obj (flywheel.models.file.File): The flywheel file-object with
-                ROI data contained within the `.info.ROI` metadata.
-
-        Returns:
-            OrderedDict: the label object populated with ROI attributes
-        """
-
-        # dictionary for labels, index, R, G, B, A
-        labels = OrderedDict()
-
-        # React OHIF Viewer
-        roi_list = [
-            individual_value
-            for roi_list in self.ohifViewer_info.values()
-            for individual_value in roi_list
-        ]
-
-        for roi in roi_list:
-            if roi.get("location"):
-                if roi["location"] not in labels.keys():
-                    label_index = int(2 ** (len(labels)))
-                    labels[roi["location"]] = RoiLabel(
-                        label=roi["location"],
-                        index=label_index,
-                        color="fbbc05",
-                        RGB=[int("fbbc05"[i : i + 2], 16) for i in [1, 3, 5]],
-                    )
-            else:
-                log.warning(
-                    "There is an ROI without a label. To include this ROI in the "
-                    "output, please attach a label."
-                )
-        self.labels = labels
-
-    def make_data(self):
-
-        self.set_bit_level()
-
-        len_labels = len(self.labels)
-        if len_labels > 0:
-            log.info("Found %s ROI labels", len_labels)
-        else:
-            log.error("Found NO ROI labels")
-
-        # Check save_single_ROIs
-        # TODO: There should also be an extra section here for binary vs bitmask.  Currently only binary is implemented
-        for label_name, label_object in self.labels.items():
-            data = self.label2data(label_name)
-
-            label_object.num_voxels = np.count_nonzero(data)
-            data = data.astype(self.dtype)
-            if self.bitmask:
-                data *= self.labels[label_name].index
-
-            self.convert_working_dir(data)
-            self.save_working_dir(label_name)
-
-        if self.combine:
-            data = np.zeros(self.shape, dtype=self.dtype)
-            for label in self.labels:
-                label_data = self.label2data(label)
-                label_data = label_data.astype(self.dtype)
-                label_data *= self.labels[label].index
-                data += label_data
-
-            self.convert_working_dir(data)
-            self.save_working_dir(combined=True)
-
-    def get_affine(self):
-
-        positions = np.mat(
-            [loaded_dicom.ImagePositionPatient for loaded_dicom in self.dicoms]
+        self.prepper = self.generate_prepper(
+            work_dir, input_file_path, self.orig_file_type
         )
-        zdif = np.diff(positions, axis=0)[:, 0]
-        mzdif = stats.mode(zdif).mode[0][0]
-        mzdif = np.round(mzdif, 4)
-        ds = self.dicoms[0]
-        self.affine = np.mat(
-            [
-                [1 * mzdif, 0, 0],
-                [0, 1 * ds.PixelSpacing[0], 0],
-                [0, 0, 1 * ds.PixelSpacing[1]],
-            ]
+        self.collector = self.generate_collector(
+            fw_client, self.prepper.orig_dir, self.file_object
         )
-
-    def move_dicoms_to_workdir(self):
-        # if archived, unzip dicom into work/dicom/
-        self.orig_dicom_dir = self.work_dir / "dicom"
-        self.output_dicom_dir = self.work_dir / "converted_dicom"
-
-        self.orig_dicom_dir.mkdir(parents=True, exist_ok=True)
-        if self.input_file_path.as_posix().endswith(".zip"):
-            # Unzip, pulling any nested files to a top directory.
-            dicom_zip = ZipFile(self.input_file_path)
-            for member in dicom_zip.namelist():
-                filename = os.path.basename(member)
-                # skip directories
-                if not filename:
-                    continue
-                # copy file (taken from zipfile's extract)
-                source = dicom_zip.open(member)
-                target = open(os.path.join(self.orig_dicom_dir, filename), "wb")
-                with source, target:
-                    shutil.copyfileobj(source, target)
-            # dicom_zip.extractall(path=dicom_dir)
-        else:
-            shutil.copy(self.input_file_path, self.orig_dicom_dir)
-
-    def get_current_study_series_uid(self):
-        # need studyInstanceUid and seriesInstanceUid from DICOM series to select
-        # appropriate records from the Session-level OHIF viewer annotations:
-        # e.g. session.info.ohifViewer.measurements.EllipticalRoi[0].imagePath =
-        #   studyInstanceUid$$$seriesInstanceUid$$$sopInstanceUid$$$0
-        # open one dicom file to extract studyInstanceUid and seriesInstanceUid
-        # If this was guaranteed to be a part of the dicom-file metadata, we could grab it
-        # from there. No guarantees. But all the tags are in the WADO database...
-        dicom = None
-        for root, _, files in os.walk(str(self.orig_dicom_dir), topdown=False):
-            for fl in files:
-                try:
-                    dicom_path = Path(root) / fl
-                    dicom = pydicom.read_file(dicom_path, force=True)
-                    break
-                except Exception as e:
-                    log.warning("Could not open dicom file. Trying another.")
-                    log.exception(e)
-                    pass
-            if dicom:
-                break
-
-        if dicom:
-            self.studyInstanceUid = dicom.StudyInstanceUID
-            self.seriesInstanceUid = dicom.SeriesInstanceUID
-        else:
-            error_message = "An invalid dicom file was encountered."
-            raise InvalidDICOMFile(error_message)
-
-    def copy_dicoms_for_export(self):
-        # convert dicom to nifti (work/dicom.nii.gz)
-        try:
-            # Copy dicoms to a new directory
-            if not os.path.exists(self.output_dicom_dir):
-                shutil.copytree(self.orig_dicom_dir, self.output_dicom_dir)
-        except Exception as e:
-            log.exception(e)
-            error_message = (
-                "An invalid dicom file was encountered. "
-                '"SeriesInstanceUID", "InstanceNumber", '
-                '"ImageOrientationPatient", or "ImagePositionPatient"'
-                " may be missing from the DICOM series."
-            )
-            raise InvalidDICOMFile(error_message)
-
-    def identify_rois_on_image(self):
-        imagePath = f"{self.studyInstanceUid}$$${self.seriesInstanceUid}$$$"
-        # check for imagePath in ohifViewer info
-        if imagePath not in str(self.ohifViewer_info):
-            error_message = "Session info is missing ROI data for selected DICOM file."
-            raise InvalidROIError(error_message)
-
-        new_ohif_measurements = {}
-        for measurement_type, measurements in self.ohifViewer_info.get(
-            "measurements", {}
-        ).items():
-
-            # Ensure this is an ROI type we can use
-            if measurement_type not in self.validROIs:
-                log.info(f"Measurement type {measurement_type} invalid, skipping")
-                continue
-
-            current_measurements = []
-
-            # This could be dict comprehension but I'm leaving it broken out for readability
-            # We're going to look through each measurement and extract those that
-            # are specifically on this particular dicom, identified by its series instance uid
-            for roi in measurements:
-                if roi.get("SeriesInstanceUID") == self.seriesInstanceUid:
-                    current_measurements.append(roi)
-
-            new_ohif_measurements[measurement_type] = current_measurements
-
-        # Now the info here only has ROI's related to this particular dicom.
-        self.ohifViewer_info = new_ohif_measurements
-
-    def set_bit_level(self):
-        # If we're not combining and binary masks are ok, we don't need to bitmask, we'll leave at default 8 bit
-        if self.combine or self.bitmask:
-            if self.dest_file_type == "dicom":
-                max_labels = 31
-            else:
-                max_labels = 63
-
-            if len(self.labels) < 8:
-                self.dtype = np.uint8
-                self.bits - 8
-            elif len(self.labels) < 16:
-                self.dtype = np.uint16
-                self.bits = 16
-            elif len(self.labels) < 32:
-                self.dtype = np.uint32
-                self.bits = 32
-
-            elif len(self.labels) > max_labels:
-                log.warning(
-                    f"Due to the maximum integer length ({max_labels+1} bits), we can "
-                    f"only keep track of a maximum of {max_labels} ROIs with a bitmasked "
-                    f"combination. You have {len(self.labels)} ROIs."
-                )
-
-    def get_dicoms(self):
-        # Acquire ROI data
-        globdir = self.orig_dicom_dir / "*"
-        dicom_files = glob.glob(globdir.as_posix())
-        dicom_files.sort()
-        dicom_files = [Path(d) for d in dicom_files]
-        dicoms = [pydicom.read_file(d) for d in dicom_files]
-        example_dicom = dicoms[0]
-        self.shape = [
-            example_dicom.pixel_array.shape[0],
-            example_dicom.pixel_array.shape[1],
-            len(dicom_files),
-        ]
-        self.dicoms = dicoms
-        self.dicom_files = dicom_files
-
-    def label2data(self, label):
-        data = np.zeros(self.shape, dtype=np.bool)
-
-        for roi_type in self.ohifViewer_info:
-            for roi in self.ohifViewer_info[roi_type]:
-                if roi.get("location") == label:
-                    data = self.fill_roi_dicom_slice(
-                        data,
-                        roi["SOPInstanceUID"],
-                        roi["handles"],
-                        dicoms=self.dicoms,
-                        roi_type=roi_type,
-                    )
-
-        return data
-
-    def convert_working_dir(self, data):
-
-        data = data.astype(self.dtype)
-
-        for i, dicom_info in enumerate(zip(self.dicom_files, self.dicoms)):
-            dicom_file = dicom_info[0]
-            dicom = dicom_info[1]
-            file_name = dicom_file.name
-            dicom_out = self.output_dicom_dir / file_name
-
-            arr = data[:, :, i]
-            arr = arr.squeeze()
-
-            dicom.BitsAllocated = self.bits
-            dicom.BitsStored = self.bits
-            dicom.HighBit = self.bits - 1
-            # dicom['PixelData'].VR = "OW"
-
-            dicom.PixelData = arr.tobytes()
-            dicom.save_as(dicom_out)
-
-    def save_working_dir(self, label=None, combined=False):
-
-        if combined:
-            label_out = "ALL"
-        else:
-            label_out = re.sub("[^0-9a-zA-Z]+", "_", label)
-
-        output_filename = "ROI_" + label_out + "_" + self.file_obj["name"]
-
-        if output_filename.endswith(".gz"):
-            output_filename = output_filename[: -1 * len(".nii.gz")]
-        elif output_filename.endswith(".nii"):
-            output_filename = output_filename[: -1 * len(".nii")]
-        elif output_filename.endswith(".dicom.zip"):
-            output_filename = output_filename[: -1 * len(".dicom.zip")]
-        elif output_filename.endswith(".zip"):
-            output_filename = output_filename[: -1 * len(".zip")]
-
-        if self.dest_file_type == "nifti":
-            command = [
-                "dcm2niix",
-                "-o",
-                self.output_dir,
-                "-f",
-                output_filename,
-                "-b",
-                "n",
-                self.output_dicom_dir,
-            ]
-        elif self.dest_file_type == "nrrd":
-            command = [
-                "dcm2niix",
-                "-o",
-                self.output_dir,
-                "-f",
-                output_filename,
-                "-e",
-                "y",
-                "-b",
-                "n",
-                self.output_dicom_dir,
-            ]
-
-        pr = sp.Popen(command)
-        pr.wait()
+        self.creator = self.generate_createor(
+            self.conversion,
+            self.file_object,
+            self.prepper.orig_dir,
+            self.prepper.output_dir,
+            combine,
+            bitmask,
+            output_dir,
+        )
 
     @staticmethod
-    def fill_roi_dicom_slice(
-        data, sop, roi_handles, roi_type="FreehandRoi", dicoms=None, reactOHIF=True
+    def generate_conversion(orig_file_type, dest_file_type, method):
+        conversion = Conversion.ConversionType(orig_file_type, dest_file_type, method)
+        _valid = conversion.validate()
+        return conversion
+
+    @staticmethod
+    def generate_prepper(work_dir, input_file_path, orig_file_type):
+
+        if orig_file_type in ["dicom", "DICOM"]:
+            prepworker = workers.Preppers.PrepDicom
+
+        elif orig_file_type in ["nifti", "NIFTI"]:
+            prepworker = workers.Preppers.PrepNifti
+
+        return workers.Preppers.Prepper(
+            work_dir=work_dir, input_file_path=input_file_path, prepper=prepworker
+        )
+
+    @staticmethod
+    def generate_collector(fw_client, orig_dir, file_object):
+
+        if file_object.file_type in ["dicom", "DICOM"]:
+            collworker = workers.Collectors.DicomRoiCollector
+
+        elif file_object.file_type in ["nifti", "NIFTI"]:
+            collworker = workers.Collectors.NiftiRoiCollector
+
+        return workers.Collectors.Prepper(
+            fw_client=fw_client,
+            orig_dir=orig_dir,
+            file_object=file_object,
+            collector=collworker,
+        )
+
+    @staticmethod
+    def generate_creator(
+        conversion, file_object, orig_dir, roi_dir, combine, bitmask, output_dir
     ):
+        if file_object.file_type in ["dicom", "DICOM"]:
+            createworker = workers.Creators.DicomCreator
 
-        dicom_sops = [d.SOPInstanceUID for d in dicoms]
-        slice = dicom_sops.index(sop)
+        elif file_object.file_type in ["nifti", "NIFTI"]:
+            createworker = workers.Creators.NiftiCreator
 
-        swap_axes = True
-        flips = [False, False]
+        converter_tree = {
+            "dcm2niix": {
+                "dicom": {
+                    "nifti": workers.Converters.dcm2niix_nifti,
+                    "nrrd": workers.Converters.dcm2niix_nrrd,
+                }
+            },
+            "slicer": {
+                "dicom": {
+                    "nifti": workers.Converters.slicer_nifti,
+                    "nrrd": workers.Converters.slicer_nifti,
+                }
+            },
+        }
 
-        orientation_slice = data[:, :, slice]
+        convertworker = converter_tree[conversion.method][conversion.source][
+            conversion.dest
+        ]
 
-        if roi_type == "FreehandRoi":
-            if reactOHIF:
-                roi_points = roi_handles["points"]
-            else:
-                roi_points = roi_handles
+        return workers.Creators.Creator(
+            orig_dir=orig_dir,
+            roi_dir=roi_dir,
+            combine=combine,
+            bitmask=bitmask,
+            output_dir=output_dir,
+            base_file_name=file_object.base_name,
+            creator=createworker,
+            converterworker=convertworker,
+        )
 
-            # If this slice already has data (i.e. this label was used in an ROI
-            # perpendicular to the current slice) we need to have the logical or
-            # of that data and the new data
-
-            orientation_slice[:, :] = np.logical_or(
-                utils.freehand2mask(
-                    roi_points, orientation_slice.shape, flips, swap_axes
-                ),
-                orientation_slice[:, :],
-            )
-
-        elif roi_type == "RectangleRoi":
-            start = roi_handles["start"]
-            end = roi_handles["end"]
-
-            # If this slice already has data (i.e. this label was used in an ROI
-            # perpendicular to the current slice) we need to have the logical or
-            # of that data and the new data
-            orientation_slice[:, :] = np.logical_or(
-                utils.rectangle2mask(
-                    start, end, orientation_slice.shape, flips, swap_axes
-                ),
-                orientation_slice[:, :],
-            )
-
-        elif roi_type == "EllipticalRoi":
-            start = roi_handles["start"]
-            end = roi_handles["end"]
-
-            # If this slice already has data (i.e. this label was used in an ROI
-            # perpendicular to the current slice) we need to have the logical or
-            # of that data and the new data
-            orientation_slice[:, :] = np.logical_or(
-                utils.ellipse2mask(
-                    start, end, orientation_slice.shape, flips, swap_axes
-                ),
-                orientation_slice[:, :],
-            )
-        data[:, :, slice] = orientation_slice
-
-        return data
+    def process_file(self):
+        self.prepper.prep()
+        ohifviewer_info = self.collector.collect()
+        self.creator.create(ohifviewer_info)
 
 
-class MeasurementExportFromNifti(MeasurementExport):
-    def class_setup(self):
-        """additional class setup stuff"""
-        pass
+"""
+Overview:
 
-    def prep_data(self):
-        """does and prepwork needed to the data"""
-        pass
+MeasurementExporter:
+    - file_object - holds the file and info on it
+    - roi_object - holds the roi and generates the roi.  Will have a "roi_generator" object, which
+        can be a "dicom ROI generator", or a "nifti roi generator".  
+        For dicoms, there needs to be some mapping between which slice goes to which dicom object.
+        This isn't necessary for niftis as it's 1:1.  Therefor, I think the dicom_ROI_Generator should 
+        have this property and store it when it gets created.  Later, the ROI_object will be passed into the 
+        "ROI exporter", which will know where to look and can handle that.
+    - ROI_exporter - probably the workhorse of this class.  This will have to be the one that's unique for 
+        each kind of export.  dcm2niix exporter, slicer exporter, plastimatch exporter, dicom2nifti exporter,
+        nifti2nifti exporter.
+        takes: roi_object, file_object
+        returns: nothing but saves the roi file out. 
+    - output_type
+    
 
-    def make_data(self):
-        pass
+ROI_generator:
+    - generates the ROI's from a source file
+    will either be dicom generator or nifti generator, each with a "generate()" function.
 
-    def get_labels(self):
-        """Gets all the labels associated with this particular dicom"""
-        pass
+"""
+
+
+# Notes:
+"""
+1. I think self.labels.num_voxels is wrong...wait no JK I think it's correct
+2. Working on the collector - it needs 
+   a. collect all ROI's related to the given image and
+   b. to make the ROI label list
+   
+   I think this is done well in the original code, but possible room
+   for improvement?
+
+3. The collector will need to pass the label/ohif metadata object
+back out to the orchestrator I think, because NEXT is the generator,
+which will rely on those to move forward.  The generator simply
+Generates ROI images in the original image format.
+4. Finally the converter.  THE CONVERTER IS A PROPERTY OF THE GENERATOR.
+Or maybe it should be generator is part of the converter... But they should be nested
+since they need to work together.  If multiple binary labels exist, it will need to:
+ a. make the mask iimage for label 1 in the original image format and save
+ b. convert that to the desired image format
+ c. repeat for all labels.
+So this has to be self-contained, it can't loop the right way otherwise.
+
+
+
+
+"""

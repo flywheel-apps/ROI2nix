@@ -6,11 +6,48 @@ FROM ubuntu:focal
 # Inheriting from established docker image:
 LABEL maintainer="Flywheel <support@flywheel.io>"
 ENV DEBIAN_FRONTEND noninteractive
+# Make directory for flywheel spec (v0):
+ENV FLYWHEEL /flywheel/v0
+WORKDIR ${FLYWHEEL}
 
+
+#############################################################
+## Step 0: setup directory structures         ##
+#############################################################
+ENV CONVERTER_DIR ${FLYWHEEL}/converters
+ENV SCRIPT_DIR ${CONVERTER_DIR}/scripts
+
+# Setup slicer dir https://www.slicer.org/
+ENV SLICER_DIR ${CONVERTER_DIR}/slicer
+ENV SLICER_DOCKER_DIR ${CONVERTER_DIR}/slicer_docker
+
+# Setup Plastimatch folder: https://plastimatch.org/
+ENV PLASTIMATCH_DIR ${CONVERTER_DIR}/plastimatch
+
+# Setup dcm2niix dir: https://github.com/rordenlab/dcm2niix
+ENV DCM2NIIX_DIR ${CONVERTER_DIR}/dcm2niix
+
+# Setup dicom2nifti dir: https://github.com/icometrix/dicom2nifti
+ENV DICOM2NIFTI_DIR ${CONVERTER_DIR}/dicom2nifti
+
+# Setup main directory for dcmheat repo
+ENV DCMHEAT_DIR ${FLYWHEEL}/dcmheat
+
+
+# Create directories
+RUN mkdir ${CONVERTER_DIR} ${SLICER_DIR} ${PLASTIMATCH_DIR} ${DCM2NIIX_DIR} ${DICOM2NIFTI_DIR} ${DCMHEAT_DIR} ${SCRIPT_DIR} ${SLICER_DOCKER_DIR}
+
+
+#############################################################
+## Step 1: Install dependencies         ##
+#############################################################
+### NOTE THIS ACTUALLY INCLUDES PASTIMATCH
+
+# Largely taking from this docker file: https://github.com/QIICR/dcmheat/blob/master/docker/Dockerfile
 # Install APT dependencies
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
-    python3-pip \ 
+    python3-pip \
     python3-setuptools \
     libgdcm-tools \
     curl \
@@ -18,40 +55,121 @@ RUN apt-get update && \
     cmake \
     make \
     build-essential \
-    git && \
-    rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+    git \
+    wget \
+    unzip \
+    build-essential \
+    xutils-dev \
+    default-jre \
+    dcmtk \
+    plastimatch \
+    libpulse-mainloop-glib0 \
+    qt5-default \
+    xvfb \
+    libxdamage1 \
+    libxcomposite-dev \
+    libxcursor1 \
+    libxrandr2 \
+    && \
+    #apt-get purge -y build-essential xutils-dev && \
+    apt-get clean autoclean && \
+    apt-get autoremove -y && \
+    rm -rf /var/lib/{apt,dpkg,cache,log}/ /tmp/* /var/tmp/*
 
+#############################################################
+## Step 2: Clone dcmheat repo for supporting files         ##
+#############################################################
+
+RUN git clone https://github.com/QIICR/dcmheat.git ${DCMHEAT_DIR}
+# Specific files needed:
+# - docker/SlicerConvert.py
+RUN mv ${DCMHEAT_DIR}/docker/SlicerConvert.py ${SCRIPT_DIR}
+
+
+#############################################################
+## Step 3: Python setup using poetry         ##
+#############################################################
+
+COPY poetry.lock pyproject.toml $FLYWHEEL/
+# Install PIP Dependencies
+RUN pip3 install --upgrade pip && \
+    pip3 install poetry && \
+    rm -rf /root/.cache/pip
+
+RUN poetry config virtualenvs.create false \
+  && poetry install --no-interaction --no-ansi
+
+#############################################################
+## Step 4: Install dcm2niix         ##
+#############################################################
+
+# Install dcm2niix
 ENV CXX=/usr/bin/gcc
 ENV DCMCOMMIT=003f0d19f1e57b0129c9dcf3e653f51ca3559028
-RUN curl -#L  https://github.com/rordenlab/dcm2niix/archive/$DCMCOMMIT.zip | bsdtar -xf- -C /usr/local
-WORKDIR /usr/local/dcm2niix-${DCMCOMMIT}/build
+RUN curl -#L  https://github.com/rordenlab/dcm2niix/archive/$DCMCOMMIT.zip | bsdtar -xf- -C ${DCM2NIIX_DIR}
+WORKDIR ${DCM2NIIX_DIR}/dcm2niix-${DCMCOMMIT}/build
 RUN cmake -DUSE_OPENJPEG=ON -MY_DEBUG_GE=ON -DCMAKE_CXX_COMPILER=/usr/bin/c++ ../ && \
     make && \
     make install
 
 
-# Make directory for flywheel spec (v0):
-ENV FLYWHEEL /flywheel/v0
-WORKDIR ${FLYWHEEL}
 
-# Install PIP Dependencies
-COPY requirements.txt ${FLYWHEEL}/requirements.txt
-RUN pip3 install --upgrade pip && \ 
-    pip3 install -r requirements.txt && \
-    rm -rf /root/.cache/pip
+#############################################################
+## Step 5: Install plastimatch         ##
+#############################################################
+# NOTE THIS IS NOW TAKEN CARE OF IN THE APT-GET INSTALL OF
+# STEP 1.  Leaving here in case that breaks or something...
 
-# Specify ENV Variables
-ENV \ 
-    PATH=$PATH  \ 
-    LD_LIBRARY_PATH=$LD_LIBRARY_PATH 
+#RUN cd /tmp && \
+#	git clone https://gitlab.com/plastimatch/plastimatch.git && \
+#	cd plastimatch && git checkout v1.7.2 && \
+#	mkdir build && cd build && \
+#	cmake -DINSTALL_PREFIX=/usr .. && \
+#	make && make install && \
+#	cp plastimatch /usr/bin
+
+
+#############################################################
+## Step 6: Install SLICER         ##
+#############################################################
+#### This is needed to run Slicer python scripts in a headless mode...ALLEGEDLY
+
+
+## Slicer 4.11
+ENV SLICER_URL http://download.slicer.org/bitstream/60add706ae4540bf6a89bf98
+RUN curl -v -s -L $SLICER_URL | tar xz -C /tmp && \
+    mv /tmp/Slicer* ${SLICER_DIR}/slicer
+ENV PATH "${SLICER_DIR}/slicer:${PATH}"
+
+RUN mkdir /tmp/runtime-sliceruser
+ENV XDG_RUNTIME_DIR=/tmp/runtime-sliceruser
+
+
+#############################################################
+## Step 7: Install dicom2nifti         ##
+#############################################################
+# NOTE: THis is a python package and is taken care of with
+# Poetry...
+
+
+#############################################################
+## Step 8: Setup flywheel gear stuff         ##
+#############################################################
 
 # Copy executable/manifest to Gear
 COPY run.py manifest.json my_tests.py ${FLYWHEEL}/
 ADD utils ${FLYWHEEL}/utils
 RUN chmod a+x /flywheel/v0/run.py
 
-# ENV preservation for Flywheel Engine
-RUN python3 -c 'import os, json; f = open("/tmp/gear_environ.json", "w");json.dump(dict(os.environ), f)'
+RUN mkdir ${FLYWHEEL}/rosetta
+RUN mkdir ${FLYWHEEL}/scrap
+RUN ln -s ${SCRIPT_DIR}/SlicerConvert.py /usr/src/SlicerConvert.py
+RUN chmod 7700 /tmp/runtime-sliceruser
 
 # Configure entrypoint
 ENTRYPOINT ["/flywheel/v0/run.py"]
+WORKDIR ${FLYWHEEL}
+
+# ENV preservation for Flywheel Engine
+RUN python3 -c 'import os, json; f = open("/tmp/gear_environ.json", "w");json.dump(dict(os.environ), f)'
+
