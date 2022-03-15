@@ -4,13 +4,14 @@ from pathlib import Path
 from zipfile import ZipFile
 import os
 import shutil
+from scipy import stats
 import logging
 import pydicom
 from utils.workers import Converters
 from collections import OrderedDict
 import glob
 import numpy as np
-import utils.utils as utils
+import utils.roi_tools as roi_tools
 import re
 from utils.objects.Labels import RoiLabel
 import utils.workers.Converters
@@ -40,45 +41,6 @@ Full process:
 4. Convert
 
 """
-
-
-@dataclass
-class Creator:
-    orig_dir: Path
-    roi_dir: Path
-    combine: bool
-    bitmask: bool
-    output_dir: Path
-    base_file_name: str
-    creator: CreateWorker = None
-    convertworker: Converters.ConvertWorker = None
-    labels: dict = {}
-    converter: Converters.Converter = Converters.Converter
-
-
-    def __post_init__(self):
-
-        self.converter = self.converter(orig_dir=self.orig_dir,
-        roi_dir=self.roi_dir,
-        combine=self.combine,
-        bitmask=self.bitmask,
-        output_dir=self.output_dir,
-        labels=self.labels,
-        converter=self.convertworker)
-
-
-        self.creator = self.creator(
-            self.orig_dir,
-            self.roi_dir,
-            self.output_dir,
-            self.base_file_name,
-            self.combine,
-            self.bitmask,
-            self.converter
-        )
-
-    def generate(self):
-        self.creator.create()
 
 
 class CreateWorker(ABC):
@@ -128,7 +90,7 @@ class CreateWorker(ABC):
                         label=roi["location"],
                         index=label_index,
                         color="fbbc05",
-                        RGB=[int("fbbc05"[i : i + 2], 16) for i in [1, 3, 5]],
+                        RGB=[int("fbbc05"[i: i + 2], 16) for i in [1, 3, 5]],
                     )
             else:
                 log.warning(
@@ -141,21 +103,60 @@ class CreateWorker(ABC):
     def create(self, ohifviewer_info):
         pass
 
+    @abstractmethod
+    def get_affine(self):
+        pass
+
+
+@dataclass
+class Creator:
+    orig_dir: Path
+    roi_dir: Path
+    combine: bool
+    bitmask: bool
+    output_dir: Path
+    base_file_name: str
+    creator: CreateWorker = None
+    converter: Converters.Converter = None
+    labels: dict = None
+
+
+
+    def __post_init__(self):
+
+        self.creator = self.creator(
+            orig_dir=self.orig_dir,
+            roi_dir=self.roi_dir,
+            output_dir=self.output_dir,
+            base_file_name=self.base_file_name,
+            combine=self.combine,
+            bitmask=self.bitmask,
+            converter=self.converter
+        )
+
+    def create(self, ohifviewer_info):
+        labels = self.creator.create(ohifviewer_info)
+        return labels
+
+    def get_affine(self):
+        return self.creator.get_affine()
+
 
 class DicomCreator(CreateWorker):
-    def __init__(self):
-        super().__init__()
+    def __init__(self, orig_dir, roi_dir, output_dir, base_file_name, combine, bitmask, converter):
+        super().__init__(orig_dir, roi_dir, output_dir, base_file_name, combine, bitmask, converter)
         self.dicoms = {}
         self.max_labels = 31
 
-    def generate(self, ohifviewer_info):
+    def create(self, ohifviewer_info):
         labels = self.get_labels(ohifviewer_info)
         self.get_dicoms()
         self.make_data(labels, ohifviewer_info)
+        return labels
 
 
-    def generate_name(self, label, combined):
-        if combined:
+    def generate_name(self, label, combine):
+        if combine:
             label_out = "ALL"
         else:
             label_out = re.sub("[^0-9a-zA-Z]+", "_", label)
@@ -189,6 +190,26 @@ class DicomCreator(CreateWorker):
         ]
         self.dicoms = dicoms
 
+    def get_affine(self):
+
+        positions = np.mat(
+            [loaded_dicom.ImagePositionPatient for dpath,loaded_dicom in self.dicoms.items()]
+        )
+        zdif = np.diff(positions, axis=0)[:, 0]
+        mzdif = stats.mode(zdif).mode[0][0]
+        mzdif = np.round(mzdif, 4)
+        ds = list(self.dicoms.values())[0]
+        affine = np.mat(
+            [
+                [1 * mzdif, 0, 0],
+                [0, 1 * ds.PixelSpacing[0], 0],
+                [0, 0, 1 * ds.PixelSpacing[1]],
+            ]
+        )
+
+        return affine
+
+
     def make_data(self, labels, ohifviewer_info):
         self.set_bit_level(labels)
         len_labels = len(labels)
@@ -197,7 +218,6 @@ class DicomCreator(CreateWorker):
             log.info("Found %s ROI labels", len_labels)
         else:
             log.error("Found NO ROI labels")
-
         # Check save_single_ROIs
         for label_name, label_object in labels.items():
             data = self.label2data(label_name, ohifviewer_info)
@@ -265,26 +285,27 @@ class DicomCreator(CreateWorker):
 
         for i, dicom_info in enumerate(self.dicoms.items()):
             dicom_file = dicom_info[0]
-            dicom = dicom_info[1]
+            dicom_data = dicom_info[1]
             file_name = dicom_file.name
-            dicom_out = self.output_dicom_dir / file_name
+            dicom_out = self.roi_dir / file_name
 
             arr = data[:, :, i]
             arr = arr.squeeze()
 
-            dicom.BitsAllocated = self.bits
-            dicom.BitsStored = self.bits
-            dicom.HighBit = self.bits - 1
-            # dicom['PixelData'].VR = "OW"
-            dicom.PixelData = arr.tobytes()
-            dicom.save_as(dicom_out)
+            dicom_data.BitsAllocated = self.bits
+            dicom_data.BitsStored = self.bits
+            dicom_data.HighBit = self.bits - 1
+            # dicom_data['PixelData'].VR = "OW"
+            dicom_data.PixelData = arr.tobytes()
+            dicom_data.save_as(dicom_out)
 
     @staticmethod
     def fill_roi_dicom_slice(
         data, sop, roi_handles, roi_type="FreehandRoi", dicoms=None, reactOHIF=True
     ):
 
-        dicom_sops = [d.SOPInstanceUID for d in dicoms]
+        dicom_data = dicoms.values()
+        dicom_sops = [d.SOPInstanceUID for d in dicom_data]
         slice = dicom_sops.index(sop)
 
         swap_axes = True
@@ -303,7 +324,7 @@ class DicomCreator(CreateWorker):
             # of that data and the new data
 
             orientation_slice[:, :] = np.logical_or(
-                utils.freehand2mask(
+                roi_tools.freehand2mask(
                     roi_points, orientation_slice.shape, flips, swap_axes
                 ),
                 orientation_slice[:, :],
@@ -317,7 +338,7 @@ class DicomCreator(CreateWorker):
             # perpendicular to the current slice) we need to have the logical or
             # of that data and the new data
             orientation_slice[:, :] = np.logical_or(
-                utils.rectangle2mask(
+                roi_tools.rectangle2mask(
                     start, end, orientation_slice.shape, flips, swap_axes
                 ),
                 orientation_slice[:, :],
@@ -331,7 +352,7 @@ class DicomCreator(CreateWorker):
             # perpendicular to the current slice) we need to have the logical or
             # of that data and the new data
             orientation_slice[:, :] = np.logical_or(
-                utils.ellipse2mask(
+                roi_tools.ellipse2mask(
                     start, end, orientation_slice.shape, flips, swap_axes
                 ),
                 orientation_slice[:, :],

@@ -2,7 +2,7 @@ import os
 import sys
 from DICOMLib import DICOMUtils
 import argparse
-import DICOMScalarVolumePlugin
+import DICOMScalarVolumePlugin as dsvp
 
 
 def setDICOMReaderApproach(approach):
@@ -13,30 +13,24 @@ def setDICOMReaderApproach(approach):
     settings = qt.QSettings()
     settings.setValue('DICOM/ScalarVolume/ReaderApproach', approachIndex)
 
-# node=slicer.util.loadVolume('/flywheel/v0/scrap/1-01.dcm')
-# slicer.util.saveNode(node, '/flywheel/v0/output/ROI_Potato_T2-haste_ax.nii')
-# exit()
+node=slicer.util.loadVolume('/flywheel/v0/scrap/1-01.dcm')
+slicer.util.saveNode(node, '/flywheel/v0/output/ROI_Potato_T2-haste_ax.nii')
+exit()
 
 parser = argparse.ArgumentParser()
-parser.add_argument("--dcmtk", help="use dcmtk to parse dicom (exclusive with --dcmtk)", action="store_true")
-parser.add_argument("--gdcm", help="use gdcm to parse dicom (exclusive with --gdcm)", action="store_true")
-parser.add_argument("--archetype", help="use archetype to parse dicom (exclusive with --archetype)", action="store_true")
+parser.add_argument("--dcmtk", help="use dcmtk to parse dicom (exclusive with --gdcm)", action="store_true")
+parser.add_argument("--gdcm", help="use dcmtk to parse dicom (exclusive with --dcmtk)", action="store_true")
 parser.add_argument("--input", help="Input DICOM directory")
 parser.add_argument("--output", help="Output directory")
 parser.add_argument("--filename", help="File name")
 args = parser.parse_args()
 
-
-# XOR on three conditions, only one can be true at a time
-if not (args.dcmtk ^ args.gdcm) | (args.gdcm ^ args.archetype):
-    raise ValueError("Cannot specify both gdcm and dcmtk and archetype")
-
+if args.dcmtk and args.gdcm:
+    raise ValueError("Cannot specify both gdcm and dcmtk")
 if args.dcmtk:
     setDICOMReaderApproach('DCMTK')
 if args.gdcm:
     setDICOMReaderApproach('GDCM')
-if args.archetype:
-    setDICOMReaderApproach('Archetype')
 
 
 indexer = ctk.ctkDICOMIndexer()
@@ -49,8 +43,6 @@ indexer.addDirectory(db, args.input)
 indexer.waitForImportFinished()
 
 slicer.util.selectModule('DICOM')
-popup = slicer.modules.DICOMWidget.browserWidget
-popup.open()
 
 fileLists = []
 for patient in db.patients():
@@ -60,23 +52,22 @@ for patient in db.patients():
         for series in db.seriesForStudy(study):
             print("Series:"+series)
             fileLists.append(db.filesForSeries(series))
-print("File lists after the loop:"+str(fileLists))
-popup.fileLists = fileLists
 
-popup.examineForLoading()
-popup.organizeLoadables()
-popup.loadCheckedLoadables()
+
+for patientUID in db.patients():
+    loadedNodeIDs.extend(DICOMUtils.loadPatientByUID(patientUID))
 
 nodes = slicer.util.getNodesByClass('vtkMRMLScalarVolumeNode')
+node = nodes[0]
 
-if len(nodes ) >1:
-    print("Input dataset resulted in more than one scalar node! Aborting.")
-elif len(nodes )==0:
-    print("No scalar volumes parsed from the input DICOM dataset! Aborting.")
-else:
-    path = os.path.join(args.output, args.filename)
-    print('Saving to ', path)
-    slicer.util.saveNode(nodes[0], path)
+referenceVolumeNode.GetOrigin()
+niftiVolumeNody.SetIJKToRASDirectionMatrix(vtkmat)
+vtkmat=vtkMatrixFromArray(np.eye(4))
+o=referenceVolumeNode.GetIJKToRASDirectionMatrix(vtkmat)
+
+
+
+
 
 import shutil
 shutil.rmtree("/tmp/SlicerDB")
