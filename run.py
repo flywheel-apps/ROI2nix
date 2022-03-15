@@ -2,10 +2,9 @@
 import logging
 import os
 from pathlib import Path
+import sys
 
 from flywheel_gear_toolkit import GearToolkitContext
-
-import sys
 
 from utils.MeasurementExporter import MeasurementExport
 from utils.roi_tools import (

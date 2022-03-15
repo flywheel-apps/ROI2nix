@@ -1,20 +1,18 @@
-from dataclasses import dataclass
+
 from abc import ABC, abstractmethod
-from pathlib import Path
-from zipfile import ZipFile
-import os
-import shutil
-from scipy import stats
-import logging
-import pydicom
-from utils.workers import Converters
 from collections import OrderedDict
+from dataclasses import dataclass
 import glob
+import logging
 import numpy as np
-import utils.roi_tools as roi_tools
+from pathlib import Path
+import pydicom
 import re
+from scipy import stats
+
 from utils.objects.Labels import RoiLabel
-import utils.workers.Converters
+import utils.roi_tools as roi_tools
+from utils.workers import Converters
 
 log = logging.getLogger(__name__)
 

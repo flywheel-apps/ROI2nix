@@ -1,38 +1,21 @@
-from dataclasses import dataclass
+
 from abc import ABC, abstractmethod
-from pathlib import Path
-from zipfile import ZipFile
-import shutil
-import logging
-import pydicom
-from utils.roi_tools import InvalidConversion, InvalidDICOMFile, InvalidROIError
-from utils.workers import Converters
-from collections import OrderedDict
+from dataclasses import dataclass
 import glob
-import numpy as np
-import utils.roi_tools as utils
-import subprocess as sp
-
-log = logging.getLogger()
-
+import logging
 import os
+from pathlib import Path
+import pydicom
 import re
+import shutil
+import subprocess as sp
 import traceback
 import unicodedata
 
-from pydicom.tag import Tag
-
-import logging
-
-import dicom2nifti.common as common
-import dicom2nifti.convert_dicom as convert_dicom
-import dicom2nifti.settings
-
-
-
-from utils.objects.Labels import RoiLabel
-from scipy import stats
 from utils.objects.Conversion import ConversionType, NIFTI_TYPE, NRRD_TYPE
+
+log = logging.getLogger()
+
 
 
 """
