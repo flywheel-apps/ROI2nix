@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 import logging
 import os
+from pathlib import Path
+import sys
 
 from flywheel_gear_toolkit import GearToolkitContext
 
-import sys
-
-from utils.MeasurementExporter import MeasurementExportFromDicom as DicomExporter
-from utils.utils import (
+from utils.MeasurementExporter import MeasurementExport
+from utils.roi_tools import (
     calculate_ROI_volume,
     output_ROI_info,
     write_3D_Slicer_CTBL,
@@ -18,7 +18,6 @@ log = logging.getLogger(__name__)
 
 def main(context):
     config = context.config
-
     fw_client = context.client
 
     try:
@@ -40,30 +39,30 @@ def main(context):
         elif file_obj["type"] == "dicom":
 
             # convert dicom-centric data to nifti-centric data
-            exporter = DicomExporter(
+            exporter = MeasurementExport(
                 fw_client=fw_client,
-                input_file_path=context.get_input_path("Input_File"),
-                orig_file_type="dicom",
+                fw_file=file_obj,
+                work_dir=Path(context.work_dir),
+                output_dir=Path(context.output_dir),
+                input_file_path=Path(context.get_input_path("Input_File")),
                 dest_file_type=destination_type,
                 combine=config.get("save_combined_output", False),
                 bitmask=not config.get("save_binary_masks", True),
-                file_object=file_obj,
-                work_dir=context.work_dir,
-                output_dir=context.output_dir,
+                method=config.get("conversion_method"),
             )
 
-        exporter.process_file()
+        ohifviewer_info, labels, affine = exporter.process_file()
 
         # #
         # # Calculate the voxel and volume of each ROI by label
-        calculate_ROI_volume(exporter.labels, exporter.affine)
+        calculate_ROI_volume(labels, affine)
         #
         # Output csv file with ROI index, label, num of voxels, and ROI volume
-        output_ROI_info(context, exporter.labels)
+        output_ROI_info(context, labels)
 
         # # Write Slicer color table file .cbtl
         if config["save_slicer_color_table"]:
-            write_3D_Slicer_CTBL(context, file_input, exporter.labels)
+            write_3D_Slicer_CTBL(context, file_input, labels)
 
     except Exception as e:
         log.exception(e)
@@ -76,7 +75,9 @@ def main(context):
     return 0
 
 
+
 if __name__ == "__main__":
+
     with GearToolkitContext() as gear_context:
         gear_context.init_logging()
         exit_status = main(gear_context)

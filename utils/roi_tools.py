@@ -4,28 +4,11 @@
  Areas for future implementation are noted for ease of prospective implementation.
 """
 
-import logging
-import os
-import os.path as op
-import re
-import shutil
-from ast import literal_eval as leval
 from collections import OrderedDict
-from pathlib import Path
-from zipfile import ZipFile
-import glob
-from scipy import stats
-
-
-import dicom2nifti
-import nibabel as nib
-import nrrd
+import logging
 import numpy as np
-import pydicom
-import requests
+import os.path as op
 from skimage import draw
-from dicom2nifti.image_volume import SliceOrientation
-
 
 log = logging.getLogger(__name__)
 

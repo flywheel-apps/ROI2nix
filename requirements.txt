@@ -10,3 +10,4 @@ scipy==1.7.3
 GDCM==1.1
 pylibjpeg==1.4.0
 pylibjpeg-libjpeg==1.3.0
+dicom2nifti==2.3.0
