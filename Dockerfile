@@ -41,8 +41,7 @@ RUN pip3 install --upgrade pip && \
     rm -rf /root/.cache/pip
 
 # Specify ENV Variables
-ENV \ 
-    PATH=$PATH  \ 
+ENV PATH=$PATH  \
     LD_LIBRARY_PATH=$LD_LIBRARY_PATH 
 
 # Copy executable/manifest to Gear
