@@ -64,6 +64,8 @@ Full process:
 
 """
 
+SLICER_SCRIPT = f"{os.environ['SCRIPT_DIR']}/RunSlicerExport.py"
+
 
 class ConvertWorker(ABC):
     def __init__(self, orig_dir, roi_dir, output_dir, ext=NIFTI_TYPE):
@@ -141,7 +143,7 @@ class slicer_dcmtk(ConvertWorker):
         command = ["xvfb-run",
             "Slicer",
             "--python-script",
-            "{}/RunSlicerExport.py".format(os.environ['SCRIPT_DIR']),
+            SLICER_SCRIPT,
             "--dcmtk",
             "--input",
             self.roi_dir.as_posix(),
@@ -181,7 +183,7 @@ class slicer_gdcm(ConvertWorker):
         command = ["xvfb-run",
             "Slicer",
             "--python-script",
-            "{}/Slicer_Export.py".format(os.environ['SCRIPT_DIR']),
+            SLICER_SCRIPT,
             "--gdcm",
             "--input",
             self.roi_dir.as_posix(),
@@ -207,7 +209,7 @@ class slicer_arch(ConvertWorker):
         command = ["xvfb-run",
             "Slicer",
             "--python-script",
-            "{}/RunSlicerExport.py".format(os.environ['SCRIPT_DIR']),
+            SLICER_SCRIPT,
             "--archetype",
             "--input",
             self.roi_dir.as_posix(),
