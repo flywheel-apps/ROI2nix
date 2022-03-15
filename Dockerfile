@@ -175,5 +175,3 @@ WORKDIR ${FLYWHEEL}
 
 # ENV preservation for Flywheel Engine
 RUN python3 -c 'import os, json; f = open("/tmp/gear_environ.json", "w");json.dump(dict(os.environ), f)'
-
-COPY utils/SlicerScripts/setup_slicer_env.sh ${FLYWHEEL}/setup_slicer_env.sh
