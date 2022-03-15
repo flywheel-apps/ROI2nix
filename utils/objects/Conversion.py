@@ -1,6 +1,11 @@
 from dataclasses import dataclass
 
 
+NIFTI_TYPE = 'nii'
+NRRD_TYPE = 'nrrd'
+
+
+
 @dataclass
 class MethodTypes:
     method: str
@@ -17,15 +22,27 @@ class MethodTypes:
 
 dcm2niix_valid_source = ['dicom']
 dcm2niix_valid_dest = ['nifti','nrrd']
-method_dcm2niix = MethodTypes(method='dcm2niix',
+METHOD_DCM2NIIX = MethodTypes(method='dcm2niix',
                               valid_source=dcm2niix_valid_source,
                               valid_dest=dcm2niix_valid_dest)
 
 slicer_valid_source = ['dicom']
 slicer_valid_dest = ['nifti','nrrd']
-method_slicer = MethodTypes(method='slicer',
-                              valid_source=dcm2niix_valid_source,
-                              valid_dest=dcm2niix_valid_dest)
+METHOD_SLICER = MethodTypes(method='slicer',
+                              valid_source=slicer_valid_source,
+                              valid_dest=slicer_valid_dest)
+
+plastimatch_valid_source = ['dicom', 'nifti']
+plastimatch_valid_dest = ['nifti', 'nrrd']
+METHOD_PLASTIMATCH = MethodTypes(method='plastimatch',
+                              valid_source=plastimatch_valid_source,
+                              valid_dest=plastimatch_valid_dest)
+
+dicom2nifti_valid_source = ['dicom']
+dicom2nifti_valid_dest = ['nifti']
+METHOD_DICOM2NIFTI = MethodTypes(method='dicom2nifti',
+                              valid_source=dicom2nifti_valid_source,
+                              valid_dest=dicom2nifti_valid_dest)
 
 
 @dataclass
@@ -34,12 +51,30 @@ class ConversionType:
     dest: str
     method_name: str
     method: MethodTypes = MethodTypes
+    ext: str = None
 
     def __post_init__(self):
-        if self.method_name=='dcm2niix':
-            self.method = method_dcm2niix
-        elif self.method_name=='slicer':
-            self.method = method_slicer
+        if self.method_name in ['dcm2niix']:
+            self.method = METHOD_DCM2NIIX
+        elif self.method_name in ['slicer-dcmtk', 'slicer-arch', 'slicer-gdmc']:
+            self.method = METHOD_SLICER
+        elif self.method_name in ['plastimatch']:
+            self.method = METHOD_PLASTIMATCH
+        elif self.method_name in ['dicom2nifti']:
+            self.method = METHOD_DICOM2NIFTI
+
+
+        lookup = {
+                NIFTI_TYPE: ['nifti', 'nii', '.nii'],
+                NRRD_TYPE: ['nrrd','.nrrd']
+        }
+
+        for e, vals in lookup.items():
+            if self.dest.lower() in vals:
+                self.ext = e
+                break
+
+
 
     def validate(self):
         return self.method.validate(self.source, self.dest)

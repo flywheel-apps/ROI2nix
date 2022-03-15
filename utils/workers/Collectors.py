@@ -6,15 +6,15 @@ import os
 import shutil
 import logging
 import pydicom
-from utils.utils import InvalidConversion, InvalidDICOMFile, InvalidROIError
+from utils.roi_tools import InvalidConversion, InvalidDICOMFile, InvalidROIError
 from flywheel import Client, FileEntry
 from collections import OrderedDict
 import glob
 import numpy as np
-import utils.utils as utils
+import utils.roi_tools as utils
 import re
 import subprocess as sp
-from utils.Labels import RoiLabel
+from utils.objects.Labels import RoiLabel
 from scipy import stats
 
 log = logging.getLogger(__name__)
@@ -41,21 +41,6 @@ Full process:
 
 """
 
-
-@dataclass
-class LabelCollector:
-    fw_client: Client
-    orig_dir: Path
-    file_object: FileEntry
-    collector: CollWorker = None
-
-    def __post_init__(self):
-        self.collector = self.collector(self.fw_client, self.file_object)
-
-    def collect_rois(self):
-        self.collector.collect()
-
-
 class CollWorker(ABC):
     def __init__(self, fw_client, file_object, orig_dir):
         self.fw_client = fw_client
@@ -67,21 +52,42 @@ class CollWorker(ABC):
     def get_ohif_info(self):
         # Can assume file is reloaded already as the file object does this automatically
         flywheel_file = self.file_object.flywheel_file
+        print(flywheel_file.name)
         if flywheel_file.get("info") and flywheel_file["info"].get("ohifViewer"):
             self.ohifviewer_info = flywheel_file["info"].get("ohifViewer")
+            print('info on file')
 
         else:
             # session stores the OHIF annotations
+            print('info on session')
             session = self.fw_client.get_session(flywheel_file["parents"]["session"])
+            print(session.label)
             self.ohifviewer_info = session.info.get("ohifViewer")
 
-        if not self.ohifViewer_info:
+        if not self.ohifviewer_info:
             error_message = "Session info is missing ROI data for selected DICOM file."
             raise InvalidROIError(error_message)
+
+
 
     @abstractmethod
     def collect(self):
         pass
+
+
+
+@dataclass
+class LabelCollector:
+    fw_client: Client
+    orig_dir: Path
+    file_object: FileEntry
+    collector: CollWorker = None
+
+    def __post_init__(self):
+        self.collector = self.collector(self.fw_client, self.file_object, self.orig_dir)
+
+    def collect(self):
+        return self.collector.collect()
 
 
 class DicomRoiCollector(CollWorker):
@@ -92,14 +98,7 @@ class DicomRoiCollector(CollWorker):
 
         return self.ohifviewer_info
 
-    def get_current_study_series_uid(self):
-        # need studyInstanceUid and seriesInstanceUid from DICOM series to select
-        # appropriate records from the Session-level OHIF viewer annotations:
-        # e.g. session.info.ohifViewer.measurements.EllipticalRoi[0].imagePath =
-        #   studyInstanceUid$$$seriesInstanceUid$$$sopInstanceUid$$$0
-        # open one dicom file to extract studyInstanceUid and seriesInstanceUid
-        # If this was guaranteed to be a part of the dicom-file metadata, we could grab it
-        # from there. No guarantees. But all the tags are in the WADO database...
+    def get_one_dicom(self):
         dicom = None
         for root, _, files in os.walk(str(self.orig_dir), topdown=False):
             for fl in files:
@@ -113,6 +112,19 @@ class DicomRoiCollector(CollWorker):
                     pass
             if dicom:
                 break
+
+        return dicom
+
+    def get_current_study_series_uid(self):
+        # need studyInstanceUid and seriesInstanceUid from DICOM series to select
+        # appropriate records from the Session-level OHIF viewer annotations:
+        # e.g. session.info.ohifViewer.measurements.EllipticalRoi[0].imagePath =
+        #   studyInstanceUid$$$seriesInstanceUid$$$sopInstanceUid$$$0
+        # open one dicom file to extract studyInstanceUid and seriesInstanceUid
+        # If this was guaranteed to be a part of the dicom-file metadata, we could grab it
+        # from there. No guarantees. But all the tags are in the WADO database...
+
+        dicom = self.get_one_dicom()
 
         if dicom:
             studyInstanceUid = dicom.StudyInstanceUID
@@ -146,7 +158,7 @@ class DicomRoiCollector(CollWorker):
             # We're going to look through each measurement and extract those that
             # are specifically on this particular dicom, identified by its series instance uid
             for roi in measurements:
-                if roi.get("SeriesInstanceUID") == self.seriesInstanceUid:
+                if roi.get("SeriesInstanceUID") == seriesInstanceUid:
                     current_measurements.append(roi)
 
             new_ohif_measurements[measurement_type] = current_measurements

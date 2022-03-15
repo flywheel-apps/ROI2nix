@@ -2,12 +2,12 @@ from abc import ABC, abstractmethod
 import logging
 from utils.objects.Files import FileObject
 from utils.objects import Conversion
-import utils.workers as workers
+from utils.workers import Preppers, Collectors, Converters, Creators
 
 log = logging.getLogger(__name__)
 
 
-class MeasurementExport(ABC):
+class MeasurementExport:
     """Exports measurements from files on flywheel"""
 
     def __init__(
@@ -35,8 +35,16 @@ class MeasurementExport(ABC):
         self.collector = self.generate_collector(
             fw_client, self.prepper.orig_dir, self.file_object
         )
-        self.creator = self.generate_createor(
-            self.conversion,
+        self.converter = self.generate_converter(
+            conversion=self.conversion,
+            orig_dir=self.prepper.orig_dir,
+            roi_dir=self.prepper.output_dir,
+            combine=combine,
+            bitmask=bitmask,
+            output_dir=output_dir,
+        )
+        self.creator = self.generate_creator(
+            self.converter,
             self.file_object,
             self.prepper.orig_dir,
             self.prepper.output_dir,
@@ -44,6 +52,9 @@ class MeasurementExport(ABC):
             bitmask,
             output_dir,
         )
+
+    def get_affine(self):
+        return self.collector.get_affine()
 
     @staticmethod
     def generate_conversion(orig_file_type, dest_file_type, method):
@@ -55,12 +66,12 @@ class MeasurementExport(ABC):
     def generate_prepper(work_dir, input_file_path, orig_file_type):
 
         if orig_file_type in ["dicom", "DICOM"]:
-            prepworker = workers.Preppers.PrepDicom
+            prepworker = Preppers.PrepDicom
 
         elif orig_file_type in ["nifti", "NIFTI"]:
-            prepworker = workers.Preppers.PrepNifti
+            prepworker = Preppers.PrepNifti
 
-        return workers.Preppers.Prepper(
+        return Preppers.Prepper(
             work_dir=work_dir, input_file_path=input_file_path, prepper=prepworker
         )
 
@@ -68,12 +79,12 @@ class MeasurementExport(ABC):
     def generate_collector(fw_client, orig_dir, file_object):
 
         if file_object.file_type in ["dicom", "DICOM"]:
-            collworker = workers.Collectors.DicomRoiCollector
+            collworker = Collectors.DicomRoiCollector
 
         elif file_object.file_type in ["nifti", "NIFTI"]:
-            collworker = workers.Collectors.NiftiRoiCollector
+            collworker = Collectors.NiftiRoiCollector
 
-        return workers.Collectors.Prepper(
+        return Collectors.LabelCollector(
             fw_client=fw_client,
             orig_dir=orig_dir,
             file_object=file_object,
@@ -81,35 +92,60 @@ class MeasurementExport(ABC):
         )
 
     @staticmethod
+    def generate_converter(conversion, orig_dir, roi_dir, combine, bitmask, output_dir):
+
+        if conversion.method_name == "dcm2niix":
+
+            if conversion.source == "dicom":
+                convertworker = Converters.dcm2niix
+
+        elif conversion.method_name == "slicer-dcmtk":
+            if conversion.source == "dicom":
+                convertworker = Converters.slicer_dcmtk
+
+        elif conversion.method_name == "slicer-gdcm":
+            if conversion.source == "dicom":
+                convertworker = Converters.slicer_gdcm
+
+        elif conversion.method_name == "slicer-arch":
+            if conversion.source == "dicom":
+                convertworker = Converters.slicer_arch
+
+        elif conversion.method_name == "plastimatch":
+            if conversion.source == "dicom":
+                convertworker = Converters.plastimatch
+
+        elif conversion.method_name == 'dicom2nifti':
+            convertworker = Converters.dicom2nifti
+
+
+
+
+
+
+        converter = Converters.Converter(
+            orig_dir=orig_dir,
+            roi_dir=roi_dir,
+            combine=combine,
+            bitmask=bitmask,
+            output_dir=output_dir,
+            conversion=conversion,
+            converter=convertworker,
+        )
+
+        return converter
+
+    @staticmethod
     def generate_creator(
-        conversion, file_object, orig_dir, roi_dir, combine, bitmask, output_dir
+        converter, file_object, orig_dir, roi_dir, combine, bitmask, output_dir
     ):
         if file_object.file_type in ["dicom", "DICOM"]:
-            createworker = workers.Creators.DicomCreator
+            createworker = Creators.DicomCreator
 
         elif file_object.file_type in ["nifti", "NIFTI"]:
-            createworker = workers.Creators.NiftiCreator
+            createworker = Creators.NiftiCreator
 
-        converter_tree = {
-            "dcm2niix": {
-                "dicom": {
-                    "nifti": workers.Converters.dcm2niix_nifti,
-                    "nrrd": workers.Converters.dcm2niix_nrrd,
-                }
-            },
-            "slicer": {
-                "dicom": {
-                    "nifti": workers.Converters.slicer_nifti,
-                    "nrrd": workers.Converters.slicer_nifti,
-                }
-            },
-        }
-
-        convertworker = converter_tree[conversion.method][conversion.source][
-            conversion.dest
-        ]
-
-        return workers.Creators.Creator(
+        return Creators.Creator(
             orig_dir=orig_dir,
             roi_dir=roi_dir,
             combine=combine,
@@ -117,13 +153,15 @@ class MeasurementExport(ABC):
             output_dir=output_dir,
             base_file_name=file_object.base_name,
             creator=createworker,
-            converterworker=convertworker,
+            converter=converter,
         )
 
     def process_file(self):
         self.prepper.prep()
         ohifviewer_info = self.collector.collect()
-        self.creator.create(ohifviewer_info)
+        labels = self.creator.create(ohifviewer_info)
+        affine = self.creator.get_affine()
+        return ohifviewer_info, labels, affine
 
 
 """

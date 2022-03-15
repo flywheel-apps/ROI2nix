@@ -6,15 +6,15 @@ import os
 import shutil
 import logging
 import pydicom
-from utils.utils import InvalidConversion, InvalidDICOMFile, InvalidROIError
+from utils.roi_tools import InvalidConversion, InvalidDICOMFile, InvalidROIError
 
 from collections import OrderedDict
 import glob
 import numpy as np
-import utils.utils as utils
+import utils.roi_tools as utils
 import re
 import subprocess as sp
-from utils.Labels import RoiLabel
+from utils.objects.Labels import RoiLabel
 from scipy import stats
 
 log = logging.getLogger(__name__)
@@ -47,6 +47,16 @@ Full process:
 
 """
 
+class PrepWorker(ABC):
+    def __init__(self, orig_dir, output_dir, input_file_path):
+        self.orig_dir = orig_dir
+        self.output_dir = output_dir
+        self.input_file_path = input_file_path
+
+    @abstractmethod
+    def prep(self):
+        pass
+
 
 @dataclass
 class Prepper:
@@ -65,15 +75,7 @@ class Prepper:
         self.prepper.prep()
 
 
-class PrepWorker(ABC):
-    def __init__(self, orig_dir, output_dir, input_file_path):
-        self.orig_dir = orig_dir
-        self.output_dir = output_dir
-        self.input_file_path = input_file_path
 
-    @abstractmethod
-    def prep(self):
-        pass
 
 
 class PrepDicom(PrepWorker):

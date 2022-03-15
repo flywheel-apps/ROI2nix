@@ -83,7 +83,6 @@ RUN apt-get update && \
 RUN git clone https://github.com/QIICR/dcmheat.git ${DCMHEAT_DIR}
 # Specific files needed:
 # - docker/SlicerConvert.py
-RUN mv ${DCMHEAT_DIR}/docker/SlicerConvert.py ${SCRIPT_DIR}
 
 
 #############################################################
@@ -158,6 +157,10 @@ ENV XDG_RUNTIME_DIR=/tmp/runtime-sliceruser
 
 # Copy executable/manifest to Gear
 COPY run.py manifest.json my_tests.py ${FLYWHEEL}/
+COPY utils/SlicerScripts/RunSlicerExport.py ${SCRIPT_DIR}/RunSlicerExport.py
+COPY utils/SlicerScripts/Slicer_Export.py ${SCRIPT_DIR}/Slicer_Export.py
+
+
 ADD utils ${FLYWHEEL}/utils
 RUN chmod a+x /flywheel/v0/run.py
 
@@ -173,3 +176,4 @@ WORKDIR ${FLYWHEEL}
 # ENV preservation for Flywheel Engine
 RUN python3 -c 'import os, json; f = open("/tmp/gear_environ.json", "w");json.dump(dict(os.environ), f)'
 
+COPY utils/SlicerScripts/setup_slicer_env.sh ${FLYWHEEL}/setup_slicer_env.sh

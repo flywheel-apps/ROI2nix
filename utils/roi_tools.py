@@ -19,7 +19,6 @@ from scipy import stats
 
 import dicom2nifti
 import nibabel as nib
-import nrrd
 import numpy as np
 import pydicom
 import requests
