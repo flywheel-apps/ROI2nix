@@ -212,7 +212,7 @@ class DicomCreator(BaseCreator):
             output_filename = self.generate_name(label_name, combine=False)
             self.converter.convert(output_filename)
 
-        if self.converter.combine:
+        if self.combine:
             data = np.zeros(self.shape, dtype=self.dtype)
             for label in labels:
                 label_data = self.label2data(label, ohifviewer_info)

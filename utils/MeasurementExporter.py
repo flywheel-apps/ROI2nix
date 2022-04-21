@@ -28,13 +28,20 @@ class MeasurementExport:
 
         # Conversion object is like a pre-check of valid input/output/conversion software types
         self.conversion = self.generate_conversion(
-            self.file_object.file_type, dest_file_type, method
+            orig_file_type=self.file_object.file_type,
+            dest_file_type=dest_file_type,
+            method=method,
         )
         self.prepper = self.generate_prepper(
-            work_dir, input_file_path, self.orig_file_type
+            work_dir=work_dir,
+            input_file_path=input_file_path,
+            orig_file_type=self.orig_file_type,
         )
         self.collector = self.generate_collector(
-            fw_client, self.prepper.orig_dir, self.file_object, self.orig_file_type
+            fw_client=fw_client,
+            orig_dir=self.prepper.orig_dir,
+            file_object=self.file_object,
+            orig_file_type=self.orig_file_type,
         )
         self.converter = self.generate_converter(
             conversion=self.conversion,
@@ -45,13 +52,13 @@ class MeasurementExport:
             output_dir=output_dir,
         )
         self.creator = self.generate_creator(
-            self.converter,
-            self.file_object,
-            self.prepper.orig_dir,
-            self.prepper.output_dir,
-            combine,
-            bitmask,
-            output_dir,
+            converter=self.converter,
+            file_object=self.file_object,
+            orig_dir=self.prepper.orig_dir,
+            roi_dir=self.prepper.output_dir,
+            combine=combine,
+            bitmask=bitmask,
+            output_dir=output_dir,
         )
 
     def get_affine(self):
@@ -79,12 +86,12 @@ class MeasurementExport:
     @staticmethod
     def generate_collector(fw_client, orig_dir, file_object, orig_file_type):
 
-
-        return Collectors.BaseCollector.factory(type_=orig_file_type,
-                                            fw_client=fw_client,
-                                            orig_dir=orig_dir,
-                                            file_object=file_object,
-                                            )
+        return Collectors.BaseCollector.factory(
+            type_=orig_file_type,
+            fw_client=fw_client,
+            orig_dir=orig_dir,
+            file_object=file_object,
+        )
 
     # if file_object.file_type in ["dicom", "DICOM"]:
     #         collworker = Collectors.DicomRoiCollector
@@ -102,14 +109,13 @@ class MeasurementExport:
     @staticmethod
     def generate_converter(conversion, orig_dir, roi_dir, combine, bitmask, output_dir):
 
-        return Converters.BaseConverter.factory(type_=conversion.method_name,
-                                                orig_dir=orig_dir,
-                                                roi_dir=roi_dir,
-                                                output_dir=output_dir,
-                                                combine=combine,
-                                                bitmask=bitmask,
-                                                conversion=conversion
-                                                )
+        return Converters.BaseConverter.factory(
+            type_=conversion.method_name,
+            orig_dir=orig_dir,
+            roi_dir=roi_dir,
+            output_dir=output_dir,
+            conversion=conversion,
+        )
 
         # if conversion.method_name == "dcm2niix":
         #
@@ -136,10 +142,6 @@ class MeasurementExport:
         #     convertworker = Converters.dicom2nifti
         #
 
-
-
-
-
         # converter = Converters.Converter(
         #     orig_dir=orig_dir,
         #     roi_dir=roi_dir,
@@ -157,15 +159,16 @@ class MeasurementExport:
         converter, file_object, orig_dir, roi_dir, combine, bitmask, output_dir
     ):
 
-
-        return Creators.BaseCreator.factory(type_=file_object.file_type,
-                                            orig_dir=orig_dir,
-                                            roi_dir=roi_dir,
-                                            output_dir=output_dir,
-                                            base_file_name=file_object.base_name,
-                                            combine=combine,
-                                            bitmask=bitmask,
-                                            converter=converter
+        return Creators.BaseCreator.factory(
+            type_=file_object.file_type,
+            orig_dir=orig_dir,
+            roi_dir=roi_dir,
+            output_dir=output_dir,
+            base_file_name=file_object.base_name,
+            combine=combine,
+            bitmask=bitmask,
+            converter=converter,
+        )
 
         # if file_object.file_type in ["dicom", "DICOM"]:
         #     createworker = Creators.DicomCreator

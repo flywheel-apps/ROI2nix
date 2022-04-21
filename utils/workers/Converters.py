@@ -68,15 +68,13 @@ class BaseConverter(ABC):
         pass
 
     @classmethod
-    def factory(cls, type_: str, orig_dir, roi_dir, output_dir, combine, bitmask, conversion):
+    def factory(cls, type_: str, orig_dir, roi_dir, output_dir, conversion):
         """Return an instantiated prepper."""
         for sub in cls.__subclasses__():
             if type_.lower() == sub._type:
                 return sub(orig_dir=orig_dir,
                             roi_dir=roi_dir,
                             output_dir=output_dir,
-                            combine=combine,
-                            bitmask=bitmask,
                             conversion=conversion)
 
             raise NotImplementedError(f'File type {type_} no supported')
