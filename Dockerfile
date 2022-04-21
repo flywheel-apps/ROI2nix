@@ -14,19 +14,19 @@ WORKDIR ${FLYWHEEL}
 #############################################################
 ## Step 0: setup directory structures         ##
 #############################################################
-ENV CONVERTER_DIR ${FLYWHEEL}/converters \
-    SCRIPT_DIR ${CONVERTER_DIR}/scripts \
+ENV CONVERTER_DIR=${FLYWHEEL}/converters \
+    SCRIPT_DIR=${CONVERTER_DIR}/scripts \
     # Setup slicer dir https://www.slicer.org/
-    SLICER_DIR ${CONVERTER_DIR}/slicer \
-    SLICER_DOCKER_DIR ${CONVERTER_DIR}/slicer_docker \
+    SLICER_DIR=${CONVERTER_DIR}/slicer \
+    SLICER_DOCKER_DIR=${CONVERTER_DIR}/slicer_docker \
     # Setup Plastimatch folder: https://plastimatch.org/
-    PLASTIMATCH_DIR ${CONVERTER_DIR}/plastimatch \
+    PLASTIMATCH_DIR=${CONVERTER_DIR}/plastimatch \
     # Setup dcm2niix dir: https://github.com/rordenlab/dcm2niix
-    DCM2NIIX_DIR ${CONVERTER_DIR}/dcm2niix \
+    DCM2NIIX_DIR=${CONVERTER_DIR}/dcm2niix \
     # Setup dicom2nifti dir: https://github.com/icometrix/dicom2nifti
-    DICOM2NIFTI_DIR ${CONVERTER_DIR}/dicom2nifti \
+    DICOM2NIFTI_DIR=${CONVERTER_DIR}/dicom2nifti \
     # Setup main directory for dcmheat repo
-    DCMHEAT_DIR ${FLYWHEEL}/dcmheat
+    DCMHEAT_DIR=${FLYWHEEL}/dcmheat
 
 
 # Create directories
@@ -97,12 +97,26 @@ RUN poetry config virtualenvs.create false \
 ## Step 4: Install dcm2niix         ##
 #############################################################
 
+# Install openjpeg for this version of dcm2niix
+# This version of dcm2niix was released  Oct 7, 2021
+ENV OJ_VERSION=2.4.0
+ENV OPENJPEGDIR=$FLYWHEEL/openjpeg
+RUN mkdir $OPENJPEGDIR
+RUN curl -#L https://github.com/uclouvain/openjpeg/archive/refs/tags/v${OJ_VERSION}.zip | bsdtar -xf- -C ${OPENJPEGDIR}
+RUN cd $OPENJPEGDIR/openjpeg-${OJ_VERSION} && \
+    mkdir build && \
+    cd build && \
+    cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER=/usr/bin/c++ .. && \
+    make && \
+    make install && \
+    make clean
+
 # Install dcm2niix
 ENV CXX=/usr/bin/gcc
 ENV DCMCOMMIT=003f0d19f1e57b0129c9dcf3e653f51ca3559028
-RUN curl -#L  https://github.com/rordenlab/dcm2niix/archive/$DCMCOMMIT.zip | bsdtar -xf- -C ${DCM2NIIX_DIR}
+RUN curl -#L  https://github.com/rordenlab/dcm2niix/archive/${DCMCOMMIT}.zip | bsdtar -xf- -C ${DCM2NIIX_DIR}
 WORKDIR ${DCM2NIIX_DIR}/dcm2niix-${DCMCOMMIT}/build
-RUN cmake -DUSE_OPENJPEG=ON -MY_DEBUG_GE=ON -DCMAKE_CXX_COMPILER=/usr/bin/c++ ../ && \
+RUN cmake -DUSE_OPENJPEG=ON -MY_DEBUG_GE=ON -DCMAKE_CXX_COMPILER=/usr/bin/c++ -DOpenJPEG_DIR=$OPENJPEGDIR ../ && \
     make && \
     make install
 
