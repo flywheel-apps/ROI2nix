@@ -35,13 +35,15 @@ Responsibilities:
 Full process:
 1. Prep
 2. Collect
-3. Generate
+3. Create
 4. Convert
 
 """
 
 
-class CreateWorker(ABC):
+class BaseCreator(ABC):
+    # Type key set on each base class to identify which class to instantiate
+    type_ = None
     def __init__(self, orig_dir, roi_dir, output_dir, base_file_name, combine, bitmask, converter):
         self.orig_dir = orig_dir
         self.roi_dir = roi_dir
@@ -56,6 +58,7 @@ class CreateWorker(ABC):
         self.max_labels = 0
         self.dtype = np.uint8
         self.bits = 8
+        self.labels = None
 
     def get_labels(self, ohifviewer_info):
         """
@@ -95,6 +98,7 @@ class CreateWorker(ABC):
                     "There is an ROI without a label. To include this ROI in the "
                     "output, please attach a label."
                 )
+        self.labels = labels
         return labels
 
     @abstractmethod
@@ -105,42 +109,21 @@ class CreateWorker(ABC):
     def get_affine(self):
         pass
 
-
-@dataclass
-class Creator:
-    orig_dir: Path
-    roi_dir: Path
-    combine: bool
-    bitmask: bool
-    output_dir: Path
-    base_file_name: str
-    creator: CreateWorker = None
-    converter: Converters.Converter = None
-    labels: dict = None
+    @classmethod
+    def factory(cls, type_: str, orig_dir, roi_dir, output_dir, base_file_name, combine, bitmask, converter):
+        """Return an instantiated Creator."""
+        for sub in cls.__subclasses__():
+            if type_.lower() == sub._type:
+                return sub(orig_dir, roi_dir, output_dir, base_file_name, combine, bitmask, converter)
+            raise NotImplementedError(f'File type {type_} no supported')
 
 
 
-    def __post_init__(self):
-
-        self.creator = self.creator(
-            orig_dir=self.orig_dir,
-            roi_dir=self.roi_dir,
-            output_dir=self.output_dir,
-            base_file_name=self.base_file_name,
-            combine=self.combine,
-            bitmask=self.bitmask,
-            converter=self.converter
-        )
-
-    def create(self, ohifviewer_info):
-        labels = self.creator.create(ohifviewer_info)
-        return labels
-
-    def get_affine(self):
-        return self.creator.get_affine()
 
 
-class DicomCreator(CreateWorker):
+class DicomCreator(BaseCreator):
+    type_ = "dicom"
+
     def __init__(self, orig_dir, roi_dir, output_dir, base_file_name, combine, bitmask, converter):
         super().__init__(orig_dir, roi_dir, output_dir, base_file_name, combine, bitmask, converter)
         self.dicoms = {}
@@ -360,5 +343,6 @@ class DicomCreator(CreateWorker):
         return data
 
 
-class NiftiCreator(CreateWorker):
+class NiftiCreator(BaseCreator):
+    type_ = "nifti-NOTIMPLEMENTED"
     pass

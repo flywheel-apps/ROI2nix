@@ -34,7 +34,7 @@ Responsibilities:
 Full process:
 1. Prep
 2. Collect
-3. Generate
+3. Create
 4. Convert
 
 """

@@ -42,7 +42,7 @@ But I do think I'm getting better, idk.
 Full process:
 1. Prep
 2. Collect
-3. Generate
+3. Create
 4. Convert
 
 """

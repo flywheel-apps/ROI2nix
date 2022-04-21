@@ -27,7 +27,7 @@ Responsibilities:
 Full process:
 1. Prep
 2. Collect
-3. Generate
+3. Create
 4. Convert
 
 """
@@ -67,7 +67,7 @@ class BaseCollector(ABC):
 
     @classmethod
     def factory(cls, type_: str, orig_dir, output_dir, input_file_path):
-        """Return an instantiated prepper."""
+        """Return an instantiated Collector."""
         for sub in cls.__subclasses__():
             if type_.lower() == sub._type:
                 return cls(orig_dir, output_dir, input_file_path)
@@ -75,6 +75,7 @@ class BaseCollector(ABC):
 
 
 class DicomRoiCollector(BaseCollector):
+    type_ = "dicom"
     def collect(self):
         self.get_ohif_info()
         studyUID, seriesUID = self.get_current_study_series_uid()
@@ -151,4 +152,5 @@ class DicomRoiCollector(BaseCollector):
         self.ohifviewer_info = new_ohif_measurements
 
 class NiftiRoiCollector(BaseCollector):
+    type_ = "nifti"
     pass
