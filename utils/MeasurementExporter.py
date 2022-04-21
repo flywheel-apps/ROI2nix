@@ -102,44 +102,53 @@ class MeasurementExport:
     @staticmethod
     def generate_converter(conversion, orig_dir, roi_dir, combine, bitmask, output_dir):
 
-        if conversion.method_name == "dcm2niix":
+        return Converters.BaseConverter.factory(type_=conversion.method_name,
+                                                orig_dir=orig_dir,
+                                                roi_dir=roi_dir,
+                                                output_dir=output_dir,
+                                                combine=combine,
+                                                bitmask=bitmask,
+                                                conversion=conversion
+                                                )
 
-            if conversion.source == "dicom":
-                convertworker = Converters.dcm2niix
+        # if conversion.method_name == "dcm2niix":
+        #
+        #     if conversion.source == "dicom":
+        #         convertworker = Converters.dcm2niix
+        #
+        # elif conversion.method_name == "slicer-dcmtk":
+        #     if conversion.source == "dicom":
+        #         convertworker = Converters.slicer_dcmtk
+        #
+        # elif conversion.method_name == "slicer-gdcm":
+        #     if conversion.source == "dicom":
+        #         convertworker = Converters.slicer_gdcm
+        #
+        # elif conversion.method_name == "slicer-arch":
+        #     if conversion.source == "dicom":
+        #         convertworker = Converters.slicer_arch
+        #
+        # elif conversion.method_name == "plastimatch":
+        #     if conversion.source == "dicom":
+        #         convertworker = Converters.plastimatch
+        #
+        # elif conversion.method_name == 'dicom2nifti':
+        #     convertworker = Converters.dicom2nifti
+        #
 
-        elif conversion.method_name == "slicer-dcmtk":
-            if conversion.source == "dicom":
-                convertworker = Converters.slicer_dcmtk
-
-        elif conversion.method_name == "slicer-gdcm":
-            if conversion.source == "dicom":
-                convertworker = Converters.slicer_gdcm
-
-        elif conversion.method_name == "slicer-arch":
-            if conversion.source == "dicom":
-                convertworker = Converters.slicer_arch
-
-        elif conversion.method_name == "plastimatch":
-            if conversion.source == "dicom":
-                convertworker = Converters.plastimatch
-
-        elif conversion.method_name == 'dicom2nifti':
-            convertworker = Converters.dicom2nifti
 
 
 
 
-
-
-        converter = Converters.Converter(
-            orig_dir=orig_dir,
-            roi_dir=roi_dir,
-            combine=combine,
-            bitmask=bitmask,
-            output_dir=output_dir,
-            conversion=conversion,
-            converter=convertworker,
-        )
+        # converter = Converters.Converter(
+        #     orig_dir=orig_dir,
+        #     roi_dir=roi_dir,
+        #     combine=combine,
+        #     bitmask=bitmask,
+        #     output_dir=output_dir,
+        #     conversion=conversion,
+        #     converter=convertworker,
+        # )
 
         return converter
 

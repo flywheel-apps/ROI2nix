@@ -51,28 +51,39 @@ SLICER_SCRIPT = f"{os.environ['SCRIPT_DIR']}/RunSlicerExport.py"
 
 
 class BaseConverter(ABC):
-    def __init__(self, orig_dir, roi_dir, output_dir, ext=NIFTI_TYPE):
+    type_ = None
+    def __init__(self, orig_dir, roi_dir, output_dir, combine=False, bitmask=False, conversion=ConversionType()):
         self.orig_dir = orig_dir
         self.roi_dir = roi_dir
         self.output_dir = output_dir
-        self.ext = ext
+        self.combine = combine
+        self.bitmask = bitmask
+        self.conversion = conversion
         self.additional_args = "" # TODO: These all need to accept additional command options from a config string
 
+        self.ext = self.conversion.ext
 
     @abstractmethod
     def convert(self, output_filename):
         pass
 
     @classmethod
-    def factory(cls, type_: str, orig_dir, roi_dir, output_dir, ext=NIFTI_TYPE):
+    def factory(cls, type_: str, orig_dir, roi_dir, output_dir, combine, bitmask, conversion):
         """Return an instantiated prepper."""
         for sub in cls.__subclasses__():
             if type_.lower() == sub._type:
-                return cls(orig_dir, roi_dir, output_dir, ext)
+                return sub(orig_dir=orig_dir,
+                            roi_dir=roi_dir,
+                            output_dir=output_dir,
+                            combine=combine,
+                            bitmask=bitmask,
+                            conversion=conversion)
+
             raise NotImplementedError(f'File type {type_} no supported')
 
 
 class dcm2niix(BaseConverter):
+    type_ = "dcm2niix"
     def run_command(self, command):
         pr = sp.Popen(command)
         pr.wait()
@@ -101,8 +112,8 @@ class dcm2niix(BaseConverter):
         print(' '.join(command))
         return command
 
-
 class slicer_dcmtk(BaseConverter):
+    type_ = "slicer-dcmtk"
     def run_command(self, command):
         pr = sp.Popen(command)
         pr.wait()
@@ -143,6 +154,7 @@ class slicer_dcmtk(BaseConverter):
         return command
 
 class slicer_gdcm(BaseConverter):
+    type_ = "slicer-gdcm"
     def run_command(self, command):
         pr = sp.Popen(command)
         pr.wait()
@@ -169,6 +181,7 @@ class slicer_gdcm(BaseConverter):
         return command
 
 class slicer_arch(BaseConverter):
+    type_ = "slicer-arch"
     def run_command(self, command):
         pr = sp.Popen(command)
         pr.wait()
@@ -197,6 +210,7 @@ class slicer_arch(BaseConverter):
         return command
 
 class plastimatch(BaseConverter):
+    type_ = "plastimatch"
     def run_command(self, command):
         pr = sp.Popen(command)
         pr.wait()
@@ -219,6 +233,7 @@ class plastimatch(BaseConverter):
         return command
 
 class dicom2nifti(BaseConverter):
+    type_ = "dicom2nifti"
     def run_command(self, command):
         pr = sp.Popen(command)
         pr.wait()
