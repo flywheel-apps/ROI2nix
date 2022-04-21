@@ -26,6 +26,7 @@ class MeasurementExport:
         self.file_object = FileObject(input_file_path, fw_file)
         self.orig_file_type = self.file_object.file_type
 
+        # Conversion object is like a pre-check of valid input/output/conversion software types
         self.conversion = self.generate_conversion(
             self.file_object.file_type, dest_file_type, method
         )
@@ -64,16 +65,16 @@ class MeasurementExport:
 
     @staticmethod
     def generate_prepper(work_dir, input_file_path, orig_file_type):
-
-        if orig_file_type in ["dicom", "DICOM"]:
-            prepworker = Preppers.PrepDicom
-
-        elif orig_file_type in ["nifti", "NIFTI"]:
-            prepworker = Preppers.PrepNifti
-
-        return Preppers.Prepper(
-            work_dir=work_dir, input_file_path=input_file_path, prepper=prepworker
-        )
+        return Preppers.BasePrepper.factory(orig_file_type, work_dir, input_file_path)
+        # if orig_file_type in ["dicom", "DICOM"]:
+        #     prepworker = Preppers.PrepDicom
+        #
+        # elif orig_file_type in ["nifti", "NIFTI"]:
+        #     prepworker = Preppers.PrepNifti
+        #
+        # return Preppers.Prepper(
+        #     work_dir=work_dir, input_file_path=input_file_path, prepper=prepworker
+        # )
 
     @staticmethod
     def generate_collector(fw_client, orig_dir, file_object):
