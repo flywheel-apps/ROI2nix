@@ -34,7 +34,7 @@ class MeasurementExport:
             work_dir, input_file_path, self.orig_file_type
         )
         self.collector = self.generate_collector(
-            fw_client, self.prepper.orig_dir, self.file_object
+            fw_client, self.prepper.orig_dir, self.file_object, self.orig_file_type
         )
         self.converter = self.generate_converter(
             conversion=self.conversion,
@@ -77,20 +77,27 @@ class MeasurementExport:
         # )
 
     @staticmethod
-    def generate_collector(fw_client, orig_dir, file_object):
+    def generate_collector(fw_client, orig_dir, file_object, orig_file_type):
 
-        if file_object.file_type in ["dicom", "DICOM"]:
-            collworker = Collectors.DicomRoiCollector
 
-        elif file_object.file_type in ["nifti", "NIFTI"]:
-            collworker = Collectors.NiftiRoiCollector
+        return Collectors.BaseCollector.factory(type_=orig_file_type,
+                                            fw_client=fw_client,
+                                            orig_dir=orig_dir,
+                                            file_object=file_object,
+                                            )
 
-        return Collectors.LabelCollector(
-            fw_client=fw_client,
-            orig_dir=orig_dir,
-            file_object=file_object,
-            collector=collworker,
-        )
+    # if file_object.file_type in ["dicom", "DICOM"]:
+    #         collworker = Collectors.DicomRoiCollector
+    #
+    #     elif file_object.file_type in ["nifti", "NIFTI"]:
+    #         collworker = Collectors.NiftiRoiCollector
+    #
+    #     return Collectors.BaseCollector.factory(
+    #         fw_client=fw_client,
+    #         orig_dir=orig_dir,
+    #         file_object=file_object,
+    #         collector=collworker,
+    #     )
 
     @staticmethod
     def generate_converter(conversion, orig_dir, roi_dir, combine, bitmask, output_dir):

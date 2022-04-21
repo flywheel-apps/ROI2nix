@@ -66,11 +66,11 @@ class BaseCollector(ABC):
         pass
 
     @classmethod
-    def factory(cls, type_: str, orig_dir, output_dir, input_file_path):
+    def factory(cls, type_: str, fw_client, file_object, orig_dir):
         """Return an instantiated Collector."""
         for sub in cls.__subclasses__():
             if type_.lower() == sub._type:
-                return cls(orig_dir, output_dir, input_file_path)
+                return sub(fw_client, file_object, orig_dir)
             raise NotImplementedError(f'File type {type_} no supported')
 
 
