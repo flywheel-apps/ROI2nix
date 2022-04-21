@@ -52,12 +52,12 @@ SLICER_SCRIPT = f"{os.environ['SCRIPT_DIR']}/RunSlicerExport.py"
 
 class BaseConverter(ABC):
     type_ = None
-    def __init__(self, orig_dir, roi_dir, output_dir, combine=False, bitmask=False, conversion=ConversionType()):
+    def __init__(self, orig_dir, roi_dir, output_dir, conversion=ConversionType()):
         self.orig_dir = orig_dir
         self.roi_dir = roi_dir
         self.output_dir = output_dir
-        self.combine = combine
-        self.bitmask = bitmask
+        # self.combine = combine
+        # self.bitmask = bitmask
         self.conversion = conversion
         self.additional_args = "" # TODO: These all need to accept additional command options from a config string
 

@@ -156,22 +156,33 @@ class MeasurementExport:
     def generate_creator(
         converter, file_object, orig_dir, roi_dir, combine, bitmask, output_dir
     ):
-        if file_object.file_type in ["dicom", "DICOM"]:
-            createworker = Creators.DicomCreator
 
-        elif file_object.file_type in ["nifti", "NIFTI"]:
-            createworker = Creators.NiftiCreator
 
-        return Creators.Creator(
-            orig_dir=orig_dir,
-            roi_dir=roi_dir,
-            combine=combine,
-            bitmask=bitmask,
-            output_dir=output_dir,
-            base_file_name=file_object.base_name,
-            creator=createworker,
-            converter=converter,
-        )
+        return Creators.BaseCreator.factory(type_=file_object.file_type,
+                                            orig_dir=orig_dir,
+                                            roi_dir=roi_dir,
+                                            output_dir=output_dir,
+                                            base_file_name=file_object.base_name,
+                                            combine=combine,
+                                            bitmask=bitmask,
+                                            converter=converter
+
+        # if file_object.file_type in ["dicom", "DICOM"]:
+        #     createworker = Creators.DicomCreator
+        #
+        # elif file_object.file_type in ["nifti", "NIFTI"]:
+        #     createworker = Creators.NiftiCreator
+        #
+        # return Creators.Creator(
+        #     orig_dir=orig_dir,
+        #     roi_dir=roi_dir,
+        #     combine=combine,
+        #     bitmask=bitmask,
+        #     output_dir=output_dir,
+        #     base_file_name=file_object.base_name,
+        #     creator=createworker,
+        #     converter=converter,
+        # )
 
     def process_file(self):
         self.prepper.prep()

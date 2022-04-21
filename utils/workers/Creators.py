@@ -210,9 +210,9 @@ class DicomCreator(BaseCreator):
 
             self.save_to_roi_dir(data)
             output_filename = self.generate_name(label_name, combine=False)
-            self.converter.convert_dir(output_filename)
+            self.converter.convert(output_filename)
 
-        if self.combine:
+        if self.converter.combine:
             data = np.zeros(self.shape, dtype=self.dtype)
             for label in labels:
                 label_data = self.label2data(label, ohifviewer_info)
@@ -222,7 +222,7 @@ class DicomCreator(BaseCreator):
 
             self.save_to_roi_dir(data)
             output_filename = self.generate_name(label_name, combine=True)
-            self.converter.convert_dir(output_filename)
+            self.converter.convert(output_filename)
 
 
     def set_bit_level(self, labels):
