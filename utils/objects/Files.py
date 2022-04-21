@@ -1,10 +1,10 @@
 from dataclasses import dataclass
-
+import flywheel.models.FileEntry as FileEntry
 
 @dataclass
 class FileObject:
     input_file_path: str
-    flywheel_file: str
+    flywheel_file: FileEntry
     file_type: str = None
 
     def __post_init__(self):

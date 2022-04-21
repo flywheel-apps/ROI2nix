@@ -14,24 +14,19 @@ WORKDIR ${FLYWHEEL}
 #############################################################
 ## Step 0: setup directory structures         ##
 #############################################################
-ENV CONVERTER_DIR ${FLYWHEEL}/converters
-ENV SCRIPT_DIR ${CONVERTER_DIR}/scripts
-
-# Setup slicer dir https://www.slicer.org/
-ENV SLICER_DIR ${CONVERTER_DIR}/slicer
-ENV SLICER_DOCKER_DIR ${CONVERTER_DIR}/slicer_docker
-
-# Setup Plastimatch folder: https://plastimatch.org/
-ENV PLASTIMATCH_DIR ${CONVERTER_DIR}/plastimatch
-
-# Setup dcm2niix dir: https://github.com/rordenlab/dcm2niix
-ENV DCM2NIIX_DIR ${CONVERTER_DIR}/dcm2niix
-
-# Setup dicom2nifti dir: https://github.com/icometrix/dicom2nifti
-ENV DICOM2NIFTI_DIR ${CONVERTER_DIR}/dicom2nifti
-
-# Setup main directory for dcmheat repo
-ENV DCMHEAT_DIR ${FLYWHEEL}/dcmheat
+ENV CONVERTER_DIR ${FLYWHEEL}/converters \
+    SCRIPT_DIR ${CONVERTER_DIR}/scripts \
+    # Setup slicer dir https://www.slicer.org/
+    SLICER_DIR ${CONVERTER_DIR}/slicer \
+    SLICER_DOCKER_DIR ${CONVERTER_DIR}/slicer_docker \
+    # Setup Plastimatch folder: https://plastimatch.org/
+    PLASTIMATCH_DIR ${CONVERTER_DIR}/plastimatch \
+    # Setup dcm2niix dir: https://github.com/rordenlab/dcm2niix
+    DCM2NIIX_DIR ${CONVERTER_DIR}/dcm2niix \
+    # Setup dicom2nifti dir: https://github.com/icometrix/dicom2nifti
+    DICOM2NIFTI_DIR ${CONVERTER_DIR}/dicom2nifti \
+    # Setup main directory for dcmheat repo
+    DCMHEAT_DIR ${FLYWHEEL}/dcmheat
 
 
 # Create directories

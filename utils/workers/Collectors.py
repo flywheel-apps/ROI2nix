@@ -32,7 +32,9 @@ Full process:
 
 """
 
-class CollWorker(ABC):
+class BaseCollector(ABC):
+    # Type key set on each base class to identify which class to instantiate
+    type_ = None
     def __init__(self, fw_client, file_object, orig_dir):
         self.fw_client = fw_client
         self.orig_dir = orig_dir
@@ -59,29 +61,20 @@ class CollWorker(ABC):
             error_message = "Session info is missing ROI data for selected DICOM file."
             raise InvalidROIError(error_message)
 
-
-
     @abstractmethod
     def collect(self):
         pass
 
+    @classmethod
+    def factory(cls, type_: str, orig_dir, output_dir, input_file_path):
+        """Return an instantiated prepper."""
+        for sub in cls.__subclasses__():
+            if type_.lower() == sub._type:
+                return cls(orig_dir, output_dir, input_file_path)
+            raise NotImplementedError(f'File type {type_} no supported')
 
 
-@dataclass
-class LabelCollector:
-    fw_client: Client
-    orig_dir: Path
-    file_object: FileEntry
-    collector: CollWorker = None
-
-    def __post_init__(self):
-        self.collector = self.collector(self.fw_client, self.file_object, self.orig_dir)
-
-    def collect(self):
-        return self.collector.collect()
-
-
-class DicomRoiCollector(CollWorker):
+class DicomRoiCollector(BaseCollector):
     def collect(self):
         self.get_ohif_info()
         studyUID, seriesUID = self.get_current_study_series_uid()
@@ -157,5 +150,5 @@ class DicomRoiCollector(CollWorker):
         # Now the info here only has ROI's related to this particular dicom.
         self.ohifviewer_info = new_ohif_measurements
 
-class NiftiRoiCollector(CollWorker):
+class NiftiRoiCollector(BaseCollector):
     pass

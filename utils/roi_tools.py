@@ -308,7 +308,7 @@ def calculate_ROI_volume(labels, affine):
             # label_dict["volume"] = volume  # mm^3
 
 
-def output_ROI_info(context, labels):
+def output_ROI_info(output_dir, labels):
     """
     output_ROI_info [summary]
 
@@ -324,14 +324,14 @@ def output_ROI_info(context, labels):
             voxels = labels[label].num_voxels
             volume = labels[label].volume
             lines.append("{},{},{},{}\n".format(label, index, voxels, volume))
-        csv_file = open(op.join(context.output_dir, "ROI_info.csv"), "w")
+        csv_file = open(op.join(output_dir, "ROI_info.csv"), "w")
         csv_file.writelines(lines)
         csv_file.close()
     else:
         log.warning("There were no labels to process.")
 
 
-def write_3D_Slicer_CTBL(context, file_input, labels):
+def write_3D_Slicer_CTBL(output_dir, file_input, labels):
     """
     write_3D_Slicer_CTBL saves the label information to a 3D Slicer colortable
         file format.
@@ -356,7 +356,7 @@ def write_3D_Slicer_CTBL(context, file_input, labels):
     if len(labels) > 0:
         ctbl = open(
             op.join(
-                context.output_dir,
+                output_dir,
                 "ROI_ALL_labels_" + output_filename + ".ctbl",
             ),
             "w",
