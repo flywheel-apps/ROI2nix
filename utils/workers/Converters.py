@@ -50,7 +50,7 @@ Full process:
 SLICER_SCRIPT = f"{os.environ['SCRIPT_DIR']}/RunSlicerExport.py"
 
 
-class ConvertWorker(ABC):
+class BaseConverter(ABC):
     def __init__(self, orig_dir, roi_dir, output_dir, ext=NIFTI_TYPE):
         self.orig_dir = orig_dir
         self.roi_dir = roi_dir
@@ -63,25 +63,16 @@ class ConvertWorker(ABC):
     def convert(self, output_filename):
         pass
 
-
-@dataclass
-class Converter:
-    orig_dir: Path
-    roi_dir: Path
-    combine: bool
-    bitmask: bool
-    output_dir: Path
-    conversion: ConversionType
-    converter: ConvertWorker = None
-
-    def __post_init__(self):
-        self.converter = self.converter(self.orig_dir, self.roi_dir, self.output_dir, self.conversion.ext)
-
-    def convert_dir(self, output_filename):
-        self.converter.convert(output_filename)
+    @classmethod
+    def factory(cls, type_: str, orig_dir, roi_dir, output_dir, ext=NIFTI_TYPE):
+        """Return an instantiated prepper."""
+        for sub in cls.__subclasses__():
+            if type_.lower() == sub._type:
+                return cls(orig_dir, roi_dir, output_dir, ext)
+            raise NotImplementedError(f'File type {type_} no supported')
 
 
-class dcm2niix(ConvertWorker):
+class dcm2niix(BaseConverter):
     def run_command(self, command):
         pr = sp.Popen(command)
         pr.wait()
@@ -111,7 +102,7 @@ class dcm2niix(ConvertWorker):
         return command
 
 
-class slicer_dcmtk(ConvertWorker):
+class slicer_dcmtk(BaseConverter):
     def run_command(self, command):
         pr = sp.Popen(command)
         pr.wait()
@@ -151,7 +142,7 @@ class slicer_dcmtk(ConvertWorker):
         print(' '.join(command))
         return command
 
-class slicer_gdcm(ConvertWorker):
+class slicer_gdcm(BaseConverter):
     def run_command(self, command):
         pr = sp.Popen(command)
         pr.wait()
@@ -177,7 +168,7 @@ class slicer_gdcm(ConvertWorker):
         ]
         return command
 
-class slicer_arch(ConvertWorker):
+class slicer_arch(BaseConverter):
     def run_command(self, command):
         pr = sp.Popen(command)
         pr.wait()
@@ -205,7 +196,7 @@ class slicer_arch(ConvertWorker):
         print(' '.join(command))
         return command
 
-class plastimatch(ConvertWorker):
+class plastimatch(BaseConverter):
     def run_command(self, command):
         pr = sp.Popen(command)
         pr.wait()
@@ -227,7 +218,7 @@ class plastimatch(ConvertWorker):
         print(' '.join(command))
         return command
 
-class dicom2nifti(ConvertWorker):
+class dicom2nifti(BaseConverter):
     def run_command(self, command):
         pr = sp.Popen(command)
         pr.wait()
