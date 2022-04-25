@@ -9,6 +9,8 @@ from pathlib import Path
 import pydicom
 import re
 from scipy import stats
+from fw_file.dicom import DICOMCollection
+
 
 from utils.objects.Labels import RoiLabel
 import utils.roi_tools as roi_tools
@@ -283,7 +285,7 @@ class DicomCreator(BaseCreator):
         data, sop, roi_handles, roi_type="FreehandRoi", dicoms=None, reactOHIF=True
     ):
 
-        dicom_sops = self.dicoms.bulk_get('SOPInstanceUID')
+        dicom_sops = dicoms.bulk_get('SOPInstanceUID')
         slice = dicom_sops.index(sop)
 
         swap_axes = True

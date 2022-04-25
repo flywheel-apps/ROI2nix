@@ -9,6 +9,10 @@ import logging
 import numpy as np
 import os.path as op
 from skimage import draw
+import re
+
+rgba_regex = ".*\((?P<R>\d+),\s+?(?P<G>\d+),\s+?(?P<B>\d+),\s+?(?P<A>\d+?\.\d+?)\)"
+rgba_regex = re.compile(rgba_regex)
 
 log = logging.getLogger(__name__)
 
@@ -206,86 +210,6 @@ def ellipse2mask(start, end, shape, axes_flips, swap_axes=False):
 
     return mask
 
-
-def gather_ROI_info(file_obj):
-    """
-    gather_ROI_info extracts label-name along with bitmasked index and RGBA
-        color code for each distinct label in the ROI collection.
-
-    Args:
-        file_obj (flywheel.models.file.File): The flywheel file-object with
-            ROI data contained within the `.info.ROI` metadata.
-
-    Returns:
-        OrderedDict: the label object populated with ROI attributes
-    """
-
-    # dictionary for labels, index, R, G, B, A
-    labels = OrderedDict()
-
-    # React OHIF Viewer
-    if (
-        "ohifViewer" in file_obj["info"].keys()
-        and "measurements" in file_obj["info"]["ohifViewer"]
-    ):
-        if (
-            ("FreehandRoi" in file_obj["info"]["ohifViewer"]["measurements"])
-            or ("RectangleRoi" in file_obj["info"]["ohifViewer"]["measurements"])
-            or ("EllipticalRoi" in file_obj["info"]["ohifViewer"]["measurements"])
-        ):
-            roi_list = []
-            for roi_type in ["FreehandRoi", "RectangleRoi", "EllipticalRoi"]:
-                roi_type_list = file_obj["info"]["ohifViewer"]["measurements"].get(
-                    roi_type
-                )
-                if roi_type_list:
-                    roi_list.extend(roi_type_list)
-
-            for roi in roi_list:
-                if roi.get("location"):
-                    if roi["location"] not in labels.keys():
-                        labels[roi["location"]] = {
-                            "index": int(2 ** (len(labels))),
-                            # Colors are not yet defined so just use this
-                            "color": "fbbc05",
-                            "RGB": [int("fbbc05"[i : i + 2], 16) for i in [1, 3, 5]],
-                        }
-                else:
-                    log.warning(
-                        "There is an ROI without a label. To include this ROI in the "
-                        "output, please attach a label."
-                    )
-    # only doing this for toolType=freehand for Meteor (legacy) OHIF Viewer
-    # Deprioritizing OHIF Meteor Annotations
-    # ROI2Nix will not do both at the same time
-    # TODO: Deprecate OHIF Meteor functionality
-    elif "roi" in file_obj["info"].keys():
-        for roi in file_obj["info"]["roi"]:
-            if (
-                roi.get("label")
-                and (roi["toolType"] == "freehand")
-                and (roi["label"] not in labels.keys())
-            ):
-                # Only if annotation type is a polygon, then grab the
-                # label, create a 2^x index for bitmasking, grab the color
-                # hash (e.g. #fbbc05), and translate it into RGB
-                labels[roi["label"]] = {
-                    "index": int(2 ** (len(labels))),
-                    "color": roi["color"],
-                    "RGB": [int(roi["color"][i : i + 2], 16) for i in [1, 3, 5]],
-                }
-    else:
-        log.warning("No ROIs were found for this image.")
-
-    if len(labels) > 63:
-        log.warning(
-            "Due to the maximum integer length (64 bits), we can "
-            "only keep track of a maximum of 63 ROIs with a bitmasked "
-            "combination. You have %i ROIs.",
-            len(labels),
-        )
-
-    return labels
 
 
 def calculate_ROI_volume(labels, affine):
