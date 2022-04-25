@@ -283,8 +283,7 @@ class DicomCreator(BaseCreator):
         data, sop, roi_handles, roi_type="FreehandRoi", dicoms=None, reactOHIF=True
     ):
 
-        dicom_data = dicoms.values()
-        dicom_sops = [d.SOPInstanceUID for d in dicom_data]
+        dicom_sops = self.dicoms.bulk_get('SOPInstanceUID')
         slice = dicom_sops.index(sop)
 
         swap_axes = True
