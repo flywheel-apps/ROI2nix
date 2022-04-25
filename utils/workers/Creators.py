@@ -18,6 +18,9 @@ from utils.workers import Converters
 
 log = logging.getLogger(__name__)
 
+rgba_regex = ".*\((?P<R>\d+),\s+?(?P<G>\d+),\s+?(?P<B>\d+),\s+?(?P<A>\d+?\.\d+?)\)"
+rgba_regex = re.compile(rgba_regex)
+
 """
 Generators - 
 Process 3 of 4
@@ -90,13 +93,16 @@ class BaseCreator(ABC):
         for roi in roi_list:
             if roi.get("location"):
                 if roi["location"] not in labels.keys():
-                    label_index = int(2 ** (len(labels)))
-                    labels[roi["location"]] = RoiLabel(
-                        label=roi["location"],
-                        index=label_index,
-                        color=roi_color,
-                        RGB=[int(roi_color[i: i + 2], 16) for i in [1, 3, 5]],
-                    )
+
+                    roi_color = roi.get("color", "rgba(187, 192, 5, 0.2)")
+                    rgba = rgba_regex.match(roi_color)
+                    rgba = [int(rgba.group("R")), int(rgba.group("G")), int(rgba.group("B")), float(rgba.group("A"))]
+
+                    labels[roi["location"]] = {
+                        "index": int(2 ** (len(labels))),
+                        "RGB": rgba,
+                        "color": f"#{hex(rgba[0])[2:]}{hex(rgba[1])[2:]}{hex(rgba[2])[2:]}"
+                    }
             else:
                 log.warning(
                     "There is an ROI without a label. To include this ROI in the "
