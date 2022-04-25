@@ -37,6 +37,8 @@ class MeasurementExport:
             input_file_path=input_file_path,
             orig_file_type=self.orig_file_type,
         )
+
+        print(self.prepper)
         self.collector = self.generate_collector(
             fw_client=fw_client,
             orig_dir=self.prepper.orig_dir,

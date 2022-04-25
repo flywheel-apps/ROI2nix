@@ -52,7 +52,7 @@ SLICER_SCRIPT = f"{os.environ['SCRIPT_DIR']}/RunSlicerExport.py"
 
 class BaseConverter(ABC):
     type_ = None
-    def __init__(self, orig_dir, roi_dir, output_dir, conversion=ConversionType()):
+    def __init__(self, orig_dir, roi_dir, output_dir, conversion=None):
         self.orig_dir = orig_dir
         self.roi_dir = roi_dir
         self.output_dir = output_dir
@@ -70,14 +70,16 @@ class BaseConverter(ABC):
     @classmethod
     def factory(cls, type_: str, orig_dir, roi_dir, output_dir, conversion):
         """Return an instantiated prepper."""
+        print(type_)
         for sub in cls.__subclasses__():
-            if type_.lower() == sub._type:
+            print(sub.type_)
+            if type_.lower() == sub.type_:
                 return sub(orig_dir=orig_dir,
                             roi_dir=roi_dir,
                             output_dir=output_dir,
                             conversion=conversion)
 
-            raise NotImplementedError(f'File type {type_} no supported')
+        raise NotImplementedError(f'File type {type_} no supported')
 
 
 class dcm2niix(BaseConverter):
@@ -92,7 +94,7 @@ class dcm2niix(BaseConverter):
 
     def make_command(self, output_filename):
         nrrd_cmd = ['']
-        if self.converter.ext == NRRD_TYPE:
+        if self.conversion.ext == NRRD_TYPE:
             nrrd_cmd = ['-e', 'y']
 
         command = [

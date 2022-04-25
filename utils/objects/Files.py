@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-import flywheel.models.FileEntry as FileEntry
+from flywheel import FileEntry
 
 @dataclass
 class FileObject:

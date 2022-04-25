@@ -47,11 +47,11 @@ METHOD_DICOM2NIFTI = MethodTypes(method='dicom2nifti',
 
 @dataclass
 class ConversionType:
-    source: str
-    dest: str
-    method_name: str
+    source: str = ''
+    dest: str = ''
+    method_name: str = ''
     method: MethodTypes = MethodTypes
-    ext: str = None
+    ext: str = ''
 
     def __post_init__(self):
         if self.method_name in ['dcm2niix']:

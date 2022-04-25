@@ -1,3 +1,7 @@
+import sys
+sys.path.append('/Users/davidparker/Documents/Flywheel/SSE/MyWork/Gears/roi2nix/ROI2nix')
+sys.path.append('/flywheel/v0')
+
 from utils.MeasurementExporter import MeasurementExport
 
 def test_main():
@@ -23,7 +27,7 @@ def test_main():
 
     combine = False
     bitmask = False
-    method = "slicer-dcmtk"
+    method = "dcm2niix"
 
     exporter = MeasurementExport(
         fw_client=fw,
@@ -38,3 +42,5 @@ def test_main():
     )
 
     ohifviewer_info, labels, affine = exporter.process_file()
+
+test_main()

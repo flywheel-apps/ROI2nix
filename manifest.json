@@ -34,7 +34,9 @@
         "XDG_RUNTIME_DIR":"/tmp/runtime-sliceruser",
         "PATH": "/flywheel/v0/converters/slicer/slicer:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
         "DEBIAN_FRONTEND":"noninteractive",
-        "_":"/usr/bin/env"
+        "_":"/usr/bin/env",
+        "OPENJPEGDIR":"/flywheel/v0/openjpeg"
+
     },
 
     "inputs": {
@@ -88,5 +90,5 @@
             ]
         }
     },
-    "command": "/flywheel/v0/run.py"
+    "command": "poetry run python /flywheel/v0/run.py"
 }

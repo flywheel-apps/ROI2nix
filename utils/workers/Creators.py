@@ -113,9 +113,9 @@ class BaseCreator(ABC):
     def factory(cls, type_: str, orig_dir, roi_dir, output_dir, base_file_name, combine, bitmask, converter):
         """Return an instantiated Creator."""
         for sub in cls.__subclasses__():
-            if type_.lower() == sub._type:
+            if type_.lower() == sub.type_:
                 return sub(orig_dir, roi_dir, output_dir, base_file_name, combine, bitmask, converter)
-            raise NotImplementedError(f'File type {type_} no supported')
+        raise NotImplementedError(f'File type {type_} no supported')
 
 
 

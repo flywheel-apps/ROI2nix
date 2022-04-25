@@ -69,9 +69,9 @@ class BaseCollector(ABC):
     def factory(cls, type_: str, fw_client, file_object, orig_dir):
         """Return an instantiated Collector."""
         for sub in cls.__subclasses__():
-            if type_.lower() == sub._type:
+            if type_.lower() == sub.type_:
                 return sub(fw_client, file_object, orig_dir)
-            raise NotImplementedError(f'File type {type_} no supported')
+        raise NotImplementedError(f'File type {type_} no supported')
 
 
 class DicomRoiCollector(BaseCollector):
