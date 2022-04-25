@@ -87,20 +87,9 @@ class PrepDicom(PrepWorker):
     def move_dicoms_to_workdir(self):
         # if archived, unzip dicom into work/dicom/
         self.orig_dir.mkdir(parents=True, exist_ok=True)
-        if self.input_file_path.as_posix().endswith(".zip"):
-            # Unzip, pulling any nested files to a top directory.
-            dicom_zip = ZipFile(self.input_file_path)
-            for member in dicom_zip.namelist():
-                filename = os.path.basename(member)
-                # skip directories
-                if not filename:
-                    continue
-                # copy file (taken from zipfile's extract)
-                source = dicom_zip.open(member)
-                target = open(os.path.join(self.orig_dir, filename), "wb")
-                with source, target:
-                    shutil.copyfileobj(source, target)
-            # dicom_zip.extractall(path=dicom_dir)
+        if zipfile.is_zipfile(self.input_file_path):
+            dcms = DICOMCollection.from_zip(self.input_file_path)
+            dcms.to_dir(self.orig_dir)
         else:
             shutil.copy(self.input_file_path, self.orig_dir)
 
