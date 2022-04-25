@@ -6,6 +6,8 @@ import logging
 import pydicom
 from utils.roi_tools import InvalidDICOMFile, InvalidROIError
 from flywheel import Client, FileEntry
+from fw_file.dicom import DICOMCollection
+
 
 
 log = logging.getLogger(__name__)
@@ -109,16 +111,10 @@ class DicomRoiCollector(BaseCollector):
         # If this was guaranteed to be a part of the dicom-file metadata, we could grab it
         # from there. No guarantees. But all the tags are in the WADO database...
 
-        dicom = self.get_one_dicom()
-
-        if dicom:
-            studyInstanceUid = dicom.StudyInstanceUID
-            seriesInstanceUid = dicom.SeriesInstanceUID
-        else:
-            error_message = "An invalid dicom file was encountered."
-            raise InvalidDICOMFile(error_message)
-
-        return studyInstanceUid, seriesInstanceUid
+        dcms = DICOMCollection.from_dir(self.orig_dir)
+        studyInstance = dcms.get('StudyInstanceUID')  # Get's value across the collection, raises a ValueError if multiple are found
+        seriesInstance = dcms.get('SeriesInstanceUID')
+        return studyInstance, seriesInstance
 
     def identify_rois_on_image(self, studyInstanceUid, seriesInstanceUid):
         imagePath = f"{studyInstanceUid}$$${seriesInstanceUid}$$$"

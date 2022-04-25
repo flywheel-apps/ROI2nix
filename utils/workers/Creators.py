@@ -83,6 +83,8 @@ class BaseCreator(ABC):
             for individual_roi in roi_type_list
         ]
 
+        roi_color = "fbbc05"
+
         for roi in roi_list:
             if roi.get("location"):
                 if roi["location"] not in labels.keys():
@@ -90,8 +92,8 @@ class BaseCreator(ABC):
                     labels[roi["location"]] = RoiLabel(
                         label=roi["location"],
                         index=label_index,
-                        color="fbbc05",
-                        RGB=[int("fbbc05"[i: i + 2], 16) for i in [1, 3, 5]],
+                        color=roi_color,
+                        RGB=[int(roi_color[i: i + 2], 16) for i in [1, 3, 5]],
                     )
             else:
                 log.warning(
@@ -162,7 +164,7 @@ class DicomCreator(BaseCreator):
         self.shape = [
             self.dicoms.get('Rows'), 
             # May be more robust to check pixel array sizes if Rows or Columns is missing, but also might want to know if size of image changes across archive.
-            self.dicoms.get('Columns')
+            self.dicoms.get('Columns'),
               # To do what you had: self.dicoms[0].dataset.raw.pixel_array.shape[1]
             len(self.dicoms),
         ]

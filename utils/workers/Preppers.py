@@ -1,11 +1,13 @@
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
+from fw_file.dicom import DICOMCollection
 import logging
 import os
 from pathlib import Path
 import shutil
 from zipfile import ZipFile
+import zipfile
 
 from utils.roi_tools import InvalidDICOMFile
 
