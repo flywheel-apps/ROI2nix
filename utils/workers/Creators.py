@@ -175,18 +175,14 @@ class DicomCreator(CreateWorker):
 
     def get_dicoms(self):
         # Acquire ROI data
-        globdir = self.orig_dir / "*"
-        dicom_files = glob.glob(globdir.as_posix())
-        dicom_files.sort()
-        dicom_files = [Path(d) for d in dicom_files]
-        dicoms = {d: pydicom.read_file(d) for d in dicom_files}
-        example_dicom = dicoms[dicom_files[0]]
+        self.dicoms = DICOMCollection.from_dir(self.orig_dir)
         self.shape = [
-            example_dicom.pixel_array.shape[0],
-            example_dicom.pixel_array.shape[1],
-            len(dicom_files),
+            self.dicoms.get('Rows'), 
+            # May be more robust to check pixel array sizes if Rows or Columns is missing, but also might want to know if size of image changes across archive.
+            self.dicoms.get('Columns')
+              # To do what you had: self.dicoms[0].dataset.raw.pixel_array.shape[1]
+            len(self.dicoms),
         ]
-        self.dicoms = dicoms
 
     def get_affine(self):
 
