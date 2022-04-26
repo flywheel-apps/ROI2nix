@@ -94,6 +94,13 @@ class BaseCreator(ABC):
             if roi.get("location"):
                 if roi["location"] not in labels.keys():
 
+                    # HAHAHA HAVE FUN WITH THIS PART!
+                    # ok ok kidding.  So the way flywheel stores the color of the ROI is by this metadata tag "color"
+                    # The value of this key is a string, that resembles the default below, "rgba(<R>, <G>, <B>, <A>)".
+                    # This part takes that string, parses out the garbage that should not be there, and extracts the
+                    # RGBA values (that is, Red, Green, Blue, Alpha).
+                    # I also save it as a hex value because the old code did it that way and I don't want to mess things
+                    # up.
                     roi_color = roi.get("color", "rgba(187, 192, 5, 0.2)")
                     rgba = rgba_regex.match(roi_color)
                     rgba = [int(rgba.group("R")), int(rgba.group("G")), int(rgba.group("B")), float(rgba.group("A"))]
