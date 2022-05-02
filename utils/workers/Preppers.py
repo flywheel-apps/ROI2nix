@@ -46,7 +46,9 @@ class BasePrepper(ABC):
     # Type key set on each base class to identify which class to instantiate
     type_ = None
     def __init__(self, work_dir, input_file_path):
-        self.work_dir = work_dir
+        if work_dir is None:
+            work_dir = ""
+        self.work_dir = Path(work_dir)
         self.output_dir = self.work_dir / "roi_image"
         self.orig_dir = self.work_dir / "original_image"
         self.input_file_path = input_file_path
@@ -81,12 +83,13 @@ class PrepDicom(BasePrepper):
 
     def move_dicoms_to_workdir(self):
         # if archived, unzip dicom into work/dicom/
-        self.orig_dir.mkdir(parents=True, exist_ok=True)
+
         if zipfile.is_zipfile(self.input_file_path):
+            self.orig_dir.mkdir(parents=True, exist_ok=True)
             dcms = DICOMCollection.from_zip(self.input_file_path)
             dcms.to_dir(self.orig_dir)
         else:
-            shutil.copy(self.input_file_path, self.orig_dir)
+            shutil.copytree(self.input_file_path, self.orig_dir)
 
 
     def copy_dicoms_for_export(self):
@@ -106,7 +109,7 @@ class PrepDicom(BasePrepper):
 
 
 class PrepNifti(BasePrepper):
-    type_ = "nifti-NOTIMPLEMENTED"
+    type_ = "nifti-notimplemented"
     def prep(self):
         pass
 

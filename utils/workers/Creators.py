@@ -52,7 +52,7 @@ class BaseCreator(ABC):
     def __init__(self, orig_dir, roi_dir, output_dir, base_file_name, combine, bitmask, converter):
         self.orig_dir = orig_dir
         self.roi_dir = roi_dir
-        self.output_dir = output_dir
+        self.output_dir = output_dir # Not actually used anywhere...
         self.base_file_name = base_file_name
         self.combine = combine
         self.bitmask = bitmask
@@ -107,6 +107,7 @@ class BaseCreator(ABC):
 
                     labels[roi["location"]] = {
                         "index": int(2 ** (len(labels))),
+                        "RGB": rgba,
                         "RGB": rgba,
                         "color": f"#{hex(rgba[0])[2:]}{hex(rgba[1])[2:]}{hex(rgba[2])[2:]}"
                     }
@@ -186,18 +187,29 @@ class DicomCreator(BaseCreator):
 
     def get_affine(self):
 
-        positions = np.mat(
-            [loaded_dicom.ImagePositionPatient for dpath,loaded_dicom in self.dicoms.items()]
-        )
-        zdif = np.diff(positions, axis=0)[:, 0]
-        mzdif = stats.mode(zdif).mode[0][0]
-        mzdif = np.round(mzdif, 4)
-        ds = list(self.dicoms.values())[0]
-        affine = np.mat(
+        sbs = self.dicoms.get('SpacingBetweenSlices')
+        pixelspacing = self.dicoms[0].get('PixelSpacing')
+
+        # positions = np.mat(
+        #     [loaded_dicom.ImagePositionPatient for dpath,loaded_dicom in self.dicoms.items()]
+        # )
+        # zdif = np.diff(positions, axis=0)[:, 0]
+        # mzdif = stats.mode(zdif).mode[0][0]
+        # mzdif = np.round(mzdif, 4)
+        # ds = list(self.dicoms.values())[0]
+        # affine = np.mat(
+        #     [
+        #         [1 * mzdif, 0, 0],
+        #         [0, 1 * ds.PixelSpacing[0], 0],
+        #         [0, 0, 1 * ds.PixelSpacing[1]],
+        #     ]
+        # )
+
+        affine = np.array(
             [
-                [1 * mzdif, 0, 0],
-                [0, 1 * ds.PixelSpacing[0], 0],
-                [0, 0, 1 * ds.PixelSpacing[1]],
+                [1 * sbs, 0, 0],
+                [0, 1 * pixelspacing[0], 0],
+                [0, 0, 1 * pixelspacing[1]],
             ]
         )
 
@@ -243,7 +255,7 @@ class DicomCreator(BaseCreator):
         if self.combine or self.bitmask:
             if len(labels) < 8:
                 self.dtype = np.uint8
-                self.bits - 8
+                self.bits = 8
             elif len(labels) < 16:
                 self.dtype = np.uint16
                 self.bits = 16
@@ -277,14 +289,15 @@ class DicomCreator(BaseCreator):
 
         data = data.astype(self.dtype)
 
-        for i, dicom_info in enumerate(self.dicoms.items()):
-            dicom_file = dicom_info[0]
-            dicom_data = dicom_info[1]
+        for dicom_info in self.dicoms:
+            i = dicom_info.InstanceNumber-1
+            dicom_file = Path(dicom_info.filepath)
+            dicom_data = pydicom.read_file(dicom_file)
             file_name = dicom_file.name
             dicom_out = self.roi_dir / file_name
 
             arr = data[:, :, i]
-            arr = arr.squeeze()
+            arr = arr.flatten()
 
             dicom_data.BitsAllocated = self.bits
             dicom_data.BitsStored = self.bits
@@ -356,5 +369,9 @@ class DicomCreator(BaseCreator):
 
 
 class NiftiCreator(BaseCreator):
-    type_ = "nifti-NOTIMPLEMENTED"
-    pass
+    type_ = "nifti-notimplemented"
+
+    def get_affine(self):
+        pass
+    def create(self):
+        pass

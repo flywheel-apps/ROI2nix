@@ -34,6 +34,7 @@ Full process:
 
 """
 
+
 class BaseCollector(ABC):
     # Type key set on each base class to identify which class to instantiate
     type_ = None
@@ -106,7 +107,7 @@ class DicomRoiCollector(BaseCollector):
         # need studyInstanceUid and seriesInstanceUid from DICOM series to select
         # appropriate records from the Session-level OHIF viewer annotations:
         # e.g. session.info.ohifViewer.measurements.EllipticalRoi[0].imagePath =
-        #   studyInstanceUid$$$seriesInstanceUid$$$sopInstanceUid$$$0
+        # studyInstanceUid$$$seriesInstanceUid$$$sopInstanceUid$$$0
         # open one dicom file to extract studyInstanceUid and seriesInstanceUid
         # If this was guaranteed to be a part of the dicom-file metadata, we could grab it
         # from there. No guarantees. But all the tags are in the WADO database...
@@ -149,4 +150,9 @@ class DicomRoiCollector(BaseCollector):
 
 class NiftiRoiCollector(BaseCollector):
     type_ = "nifti"
-    pass
+
+    def collect(self):
+        pass
+
+
+

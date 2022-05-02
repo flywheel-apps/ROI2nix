@@ -79,7 +79,7 @@ class BaseConverter(ABC):
                             output_dir=output_dir,
                             conversion=conversion)
 
-        raise NotImplementedError(f'File type {type_} no supported')
+        raise NotImplementedError(f'File type {type_} not supported')
 
 
 class dcm2niix(BaseConverter):
@@ -111,6 +111,7 @@ class dcm2niix(BaseConverter):
         command = [c for c in command if c]
         print(' '.join(command))
         return command
+
 
 class slicer_dcmtk(BaseConverter):
     type_ = "slicer-dcmtk"
@@ -266,6 +267,7 @@ class dicom2nifti(BaseConverter):
             raise Exception('error converting with dicom2nifti')
 
         found_file = found_file[0]
+        # Dicom2nifti only supports .nii conversion
         ext = found_file[found_file.find('.nii'):]
 
         output_filename = os.path.join(self.output_dir.as_posix(), output_filename+ext)
