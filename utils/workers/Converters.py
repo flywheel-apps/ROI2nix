@@ -1,4 +1,3 @@
-
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 import glob
@@ -15,7 +14,6 @@ import unicodedata
 from utils.objects.Conversion import ConversionType, NIFTI_TYPE, NRRD_TYPE
 
 log = logging.getLogger()
-
 
 
 """
@@ -48,13 +46,15 @@ Full process:
 """
 
 SLICER_SCRIPT = f"{os.environ['SCRIPT_DIR']}/RunSlicerExport.py"
-SLICER_PATH="Slicer"
-PLASTIMATCH_PATH="plastimatch"
-DCM2NIIX_PATH="dcm2niix"
-DICOM2NIFTI_PATH="dicom2nifti"
+SLICER_PATH = "Slicer"
+PLASTIMATCH_PATH = "plastimatch"
+DCM2NIIX_PATH = "dcm2niix"
+DICOM2NIFTI_PATH = "dicom2nifti"
+
 
 class BaseConverter(ABC):
     type_ = None
+
     def __init__(self, orig_dir, roi_dir, output_dir, conversion=None):
         self.orig_dir = orig_dir
         self.roi_dir = roi_dir
@@ -62,7 +62,7 @@ class BaseConverter(ABC):
         # self.combine = combine
         # self.bitmask = bitmask
         self.conversion = conversion
-        self.additional_args = "" # TODO: These all need to accept additional command options from a config string
+        self.additional_args = ""  # TODO: These all need to accept additional command options from a config string
 
         self.ext = self.conversion.ext
 
@@ -76,16 +76,19 @@ class BaseConverter(ABC):
         print(type_)
         for sub in cls.__subclasses__():
             if type_.lower() == sub.type_:
-                return sub(orig_dir=orig_dir,
-                            roi_dir=roi_dir,
-                            output_dir=output_dir,
-                            conversion=conversion)
+                return sub(
+                    orig_dir=orig_dir,
+                    roi_dir=roi_dir,
+                    output_dir=output_dir,
+                    conversion=conversion,
+                )
 
-        raise NotImplementedError(f'File type {type_} not supported')
+        raise NotImplementedError(f"File type {type_} not supported")
 
 
 class dcm2niix(BaseConverter):
     type_ = "dcm2niix"
+
     def run_command(self, command):
         pr = sp.Popen(command)
         pr.wait()
@@ -95,14 +98,14 @@ class dcm2niix(BaseConverter):
         self.run_command(command)
 
     def make_command(self, output_filename):
-        nrrd_cmd = ['']
+        nrrd_cmd = [""]
         if self.conversion.ext == NRRD_TYPE:
-            nrrd_cmd = ['-e', 'y']
+            nrrd_cmd = ["-e", "y"]
 
         # command = ["xvfb-run",
         #     "env"
         # ]
-        command = ["xvfb-run",
+        command = [
             DCM2NIIX_PATH,
             "-o",
             self.output_dir.as_posix(),
@@ -114,30 +117,26 @@ class dcm2niix(BaseConverter):
             self.roi_dir.as_posix(),
         ]
         command = [c for c in command if c]
-        print(' '.join(command))
+        print(" ".join(command))
         return command
 
 
 class slicer_dcmtk(BaseConverter):
     type_ = "slicer-dcmtk"
+
     def run_command(self, command):
-        #os.system(' '.join(command))
         pr = sp.Popen(command)
         pr.wait()
-        #raise Exception()
 
     def convert(self, output_filename):
         command = self.make_command(output_filename)
         self.run_command(command)
 
     def make_command(self, output_filename):
-        output_filename = output_filename+f'.{self.ext}'
+        output_filename = output_filename + f".{self.ext}"
 
-        # command = ["xvfb-run",
-        #     "env"
-        # ]
-
-        command = ["xvfb-run",
+        command = [
+            "xvfb-run",
             SLICER_PATH,
             "--python-script",
             SLICER_SCRIPT,
@@ -147,7 +146,7 @@ class slicer_dcmtk(BaseConverter):
             "--output",
             self.output_dir.as_posix(),
             "--filename",
-            output_filename
+            output_filename,
         ]
 
         # output=os.path.join(self.output_dir,output_filename+'.{}'.format(self.ext))
@@ -162,11 +161,13 @@ class slicer_dcmtk(BaseConverter):
         #            "--python-code",
         #            pycode
         # ]
-        print(' '.join(command))
+        print(" ".join(command))
         return command
+
 
 class slicer_gdcm(BaseConverter):
     type_ = "slicer-gdcm"
+
     def run_command(self, command):
         pr = sp.Popen(command)
         pr.wait()
@@ -176,9 +177,10 @@ class slicer_gdcm(BaseConverter):
         self.run_command(command)
 
     def make_command(self, output_filename):
-        output_filename = output_filename+f'.{self.ext}'
+        output_filename = output_filename + f".{self.ext}"
 
-        command = ["xvfb-run",
+        command = [
+            "xvfb-run",
             SLICER_PATH,
             "--python-script",
             SLICER_SCRIPT,
@@ -188,12 +190,14 @@ class slicer_gdcm(BaseConverter):
             "--output",
             self.output_dir.as_posix(),
             "--filename",
-            output_filename
+            output_filename,
         ]
         return command
 
+
 class slicer_arch(BaseConverter):
     type_ = "slicer-arch"
+
     def run_command(self, command):
         pr = sp.Popen(command)
         pr.wait()
@@ -203,9 +207,10 @@ class slicer_arch(BaseConverter):
         self.run_command(command)
 
     def make_command(self, output_filename):
-        output_filename = output_filename+f'.{self.ext}'
+        output_filename = output_filename + f".{self.ext}"
 
-        command = ["xvfb-run",
+        command = [
+            "xvfb-run",
             SLICER_PATH,
             "--python-script",
             SLICER_SCRIPT,
@@ -216,13 +221,14 @@ class slicer_arch(BaseConverter):
             self.output_dir.as_posix(),
             "--filename",
             output_filename,
-
         ]
-        print(' '.join(command))
+        print(" ".join(command))
         return command
+
 
 class plastimatch(BaseConverter):
     type_ = "plastimatch"
+
     def run_command(self, command):
         pr = sp.Popen(command)
         pr.wait()
@@ -233,19 +239,24 @@ class plastimatch(BaseConverter):
 
     def make_command(self, output_filename):
 
-        output_filename = os.path.join(self.output_dir.as_posix(), output_filename+f'.{self.ext}')
-        command = [PLASTIMATCH_PATH,
-                   "convert",
-                   "--input",
-                   self.roi_dir.as_posix(),
-                   "--output-img",
-                   output_filename
+        output_filename = os.path.join(
+            self.output_dir.as_posix(), output_filename + f".{self.ext}"
+        )
+        command = [
+            PLASTIMATCH_PATH,
+            "convert",
+            "--input",
+            self.roi_dir.as_posix(),
+            "--output-img",
+            output_filename,
         ]
-        print(' '.join(command))
+        print(" ".join(command))
         return command
+
 
 class dicom2nifti(BaseConverter):
     type_ = "dicom2nifti"
+
     def run_command(self, command):
         pr = sp.Popen(command)
         pr.wait()
@@ -255,15 +266,14 @@ class dicom2nifti(BaseConverter):
         self.run_command(command)
         self.rename_dicom2nifti_output(output_filename)
 
-
     def make_command(self):
 
-
-        command = [DICOM2NIFTI_PATH,
-                   self.roi_dir.as_posix(),
-                   self.output_dir.as_posix()
+        command = [
+            DICOM2NIFTI_PATH,
+            self.roi_dir.as_posix(),
+            self.output_dir.as_posix(),
         ]
-        print(' '.join(command))
+        print(" ".join(command))
 
         return command
 
@@ -271,42 +281,46 @@ class dicom2nifti(BaseConverter):
 
         orig_output_basename = self.guess_dicom2nifti_outputname()
         orig_output_basename += ".*"
-        glob_string = self.output_dir/orig_output_basename
+        glob_string = self.output_dir / orig_output_basename
         found_file = glob.glob(glob_string.as_posix())
         if not found_file:
-            log.error('error converting with dicom2nifti')
-            raise Exception('error converting with dicom2nifti')
+            log.error("error converting with dicom2nifti")
+            raise Exception("error converting with dicom2nifti")
 
         found_file = found_file[0]
         # Dicom2nifti only supports .nii conversion
-        ext = found_file[found_file.find('.nii'):]
+        ext = found_file[found_file.find(".nii") :]
 
-        output_filename = os.path.join(self.output_dir.as_posix(), output_filename+ext)
-        log.debug(f'found {found_file}, renaming to {output_filename}')
+        output_filename = os.path.join(
+            self.output_dir.as_posix(), output_filename + ext
+        )
+        log.debug(f"found {found_file}, renaming to {output_filename}")
         shutil.move(found_file, output_filename)
 
-
     def guess_dicom2nifti_outputname(self):
-        first_dicom = glob.glob(os.path.join(self.roi_dir.as_posix(), '*'))[0]
+        first_dicom = glob.glob(os.path.join(self.roi_dir.as_posix(), "*"))[0]
         dicom_input = pydicom.read_file(first_dicom)
 
-
         base_filename = ""
-        if 'SeriesNumber' in dicom_input:
-            base_filename = _remove_accents('%s' % dicom_input.SeriesNumber)
-            if 'SeriesDescription' in dicom_input:
-                base_filename = _remove_accents('%s_%s' % (base_filename,
-                                                           dicom_input.SeriesDescription))
-            elif 'SequenceName' in dicom_input:
-                base_filename = _remove_accents('%s_%s' % (base_filename,
-                                                           dicom_input.SequenceName))
-            elif 'ProtocolName' in dicom_input:
-                base_filename = _remove_accents('%s_%s' % (base_filename,
-                                                           dicom_input.ProtocolName))
+        if "SeriesNumber" in dicom_input:
+            base_filename = _remove_accents("%s" % dicom_input.SeriesNumber)
+            if "SeriesDescription" in dicom_input:
+                base_filename = _remove_accents(
+                    "%s_%s" % (base_filename, dicom_input.SeriesDescription)
+                )
+            elif "SequenceName" in dicom_input:
+                base_filename = _remove_accents(
+                    "%s_%s" % (base_filename, dicom_input.SequenceName)
+                )
+            elif "ProtocolName" in dicom_input:
+                base_filename = _remove_accents(
+                    "%s_%s" % (base_filename, dicom_input.ProtocolName)
+                )
         else:
             base_filename = _remove_accents(dicom_input.SeriesInstanceUID)
 
         return base_filename
+
 
 def _remove_accents(unicode_filename):
     """
@@ -316,10 +330,14 @@ def _remove_accents(unicode_filename):
     # noinspection PyBroadException
     try:
         unicode_filename = unicode_filename.replace(" ", "_")
-        cleaned_filename = unicodedata.normalize('NFKD', unicode_filename).encode('ASCII', 'ignore').decode('ASCII')
+        cleaned_filename = (
+            unicodedata.normalize("NFKD", unicode_filename)
+            .encode("ASCII", "ignore")
+            .decode("ASCII")
+        )
 
-        cleaned_filename = re.sub(r'[^\w\s-]', '', cleaned_filename.strip().lower())
-        cleaned_filename = re.sub(r'[-\s]+', '-', cleaned_filename)
+        cleaned_filename = re.sub(r"[^\w\s-]", "", cleaned_filename.strip().lower())
+        cleaned_filename = re.sub(r"[-\s]+", "-", cleaned_filename)
 
         return cleaned_filename
     except:

@@ -1,4 +1,3 @@
-
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from fw_file.dicom import DICOMCollection
@@ -45,6 +44,7 @@ Full process:
 class BasePrepper(ABC):
     # Type key set on each base class to identify which class to instantiate
     type_ = None
+
     def __init__(self, work_dir, input_file_path):
         if work_dir is None:
             work_dir = ""
@@ -63,12 +63,12 @@ class BasePrepper(ABC):
         for sub in cls.__subclasses__():
             if type_.lower() == sub.type_:
                 return sub(work_dir, input_file_path)
-        raise NotImplementedError(f'File type {type_} no supported')
-
+        raise NotImplementedError(f"File type {type_} no supported")
 
 
 class PrepDicom(BasePrepper):
     type_ = "dicom"
+
     def prep(self):
         """
         For the dicom prepper, this does the following:
@@ -80,7 +80,6 @@ class PrepDicom(BasePrepper):
         self.move_dicoms_to_workdir()
         self.copy_dicoms_for_export()
 
-
     def move_dicoms_to_workdir(self):
         # if archived, unzip dicom into work/dicom/
 
@@ -90,7 +89,6 @@ class PrepDicom(BasePrepper):
             dcms.to_dir(self.orig_dir)
         else:
             shutil.copytree(self.input_file_path, self.orig_dir)
-
 
     def copy_dicoms_for_export(self):
         try:
@@ -110,15 +108,9 @@ class PrepDicom(BasePrepper):
 
 class PrepNifti(BasePrepper):
     type_ = "nifti-notimplemented"
+
     def prep(self):
         pass
-
-
-
-
-
-
-
 
 
 #

@@ -1,5 +1,6 @@
 from pathlib import Path
 
+
 def parser(context):
     config = context.config
     fw_client = context.client

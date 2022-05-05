@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from flywheel import FileEntry
 
+
 @dataclass
 class FileObject:
     input_file_path: str
@@ -12,5 +13,3 @@ class FileObject:
         self.flywheel_file = self.flywheel_file.reload()
         self.file_type = self.flywheel_file.type
         self.base_name = self.flywheel_file.name
-
-

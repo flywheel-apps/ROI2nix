@@ -7,7 +7,9 @@ from utils.parser import parser
 import utils.ExportRois as ExportRois
 
 log = logging.getLogger(__name__)
-print('^^^^ FILE')
+print("^^^^ FILE")
+
+
 def main(
     fw_client,
     save_combined_output,

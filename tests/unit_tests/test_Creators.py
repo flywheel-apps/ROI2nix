@@ -16,7 +16,6 @@ os.environ["SCRIPT_DIR"] = os.path.join(sd.cwd, "utils/SlicerScripts")
 from utils.workers import Creators
 
 
-
 log = logging.getLogger(__name__)
 
 
@@ -275,13 +274,11 @@ def test_DicomCreator_label2data():
         for roi in metadata_json[roi_type]:
             if roi.get("location") == label:
 
-                ar=np.zeros((0,0,0),dtype=bool)
-                sop=roi["SOPInstanceUID"]
-                handles=roi["handles"]
-                dicoms={}
-                returnroi_type=roi_type
-
-
+                ar = np.zeros((0, 0, 0), dtype=bool)
+                sop = roi["SOPInstanceUID"]
+                handles = roi["handles"]
+                dicoms = {}
+                returnroi_type = roi_type
 
     with patch("utils.workers.Creators.DicomCreator.fill_roi_dicom_slice", MagicMock()):
 
@@ -300,11 +297,14 @@ def test_DicomCreator_label2data():
         print(creator.fill_roi_dicom_slice.call_args_list)
         creator.fill_roi_dicom_slice.assert_called_once()
         # Note: for some reason this doens't work with "assert_called_with"
-        creator.fill_roi_dicom_slice.call_args_list[0] == ((ar,sop,handles),{'dicoms':{},'roi_type':returnroi_type})
+        creator.fill_roi_dicom_slice.call_args_list[0] == (
+            (ar, sop, handles),
+            {"dicoms": {}, "roi_type": returnroi_type},
+        )
 
 
 def test_DicomCreator_set_bit_level(caplog):
-    type = 'dicom'
+    type = "dicom"
     creator = Creators.BaseCreator.factory(
         type_=type,
         orig_dir=None,
@@ -352,7 +352,7 @@ def test_DicomCreator_save_to_roi_dir():
     dicom_dir = sd.unzip_t1()
     test_type = "dicom"
     base_file_name = "T2_Phantom"
-    roi_dir = Path(sd.WORKING_DIR)/'roi_dir'
+    roi_dir = Path(sd.WORKING_DIR) / "roi_dir"
 
     if not os.path.exists(roi_dir):
         os.mkdir(roi_dir)
@@ -369,7 +369,7 @@ def test_DicomCreator_save_to_roi_dir():
     )
     creator.get_dicoms()
 
-    data = np.random.rand(creator.shape[0], creator.shape[1], creator.shape[2])*100
+    data = np.random.rand(creator.shape[0], creator.shape[1], creator.shape[2]) * 100
     data = data.astype(creator.dtype)
     creator.save_to_roi_dir(data)
 
@@ -378,11 +378,10 @@ def test_DicomCreator_save_to_roi_dir():
         dicom_file = Path(dcm.filepath)
         dicom_data = pydicom.read_file(dicom_file)
         num = dcm.InstanceNumber
-        flat_data = data[:,:,num-1]
+        flat_data = data[:, :, num - 1]
         flat_data = flat_data.flatten()
         flat_data = flat_data.tobytes()
 
-
-        assert dicom_data.get('PixelData') == flat_data
+        assert dicom_data.get("PixelData") == flat_data
 
     sd.clean_working_dir()

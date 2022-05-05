@@ -211,7 +211,6 @@ def ellipse2mask(start, end, shape, axes_flips, swap_axes=False):
     return mask
 
 
-
 def calculate_ROI_volume(labels, affine):
     """
     calculate_ROI_volume calculates the number of voxels and volume in each of

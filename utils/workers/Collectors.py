@@ -9,7 +9,6 @@ from flywheel import Client, FileEntry
 from fw_file.dicom import DICOMCollection
 
 
-
 log = logging.getLogger(__name__)
 
 """
@@ -38,6 +37,7 @@ Full process:
 class BaseCollector(ABC):
     # Type key set on each base class to identify which class to instantiate
     type_ = None
+
     def __init__(self, fw_client, file_object, orig_dir):
         self.fw_client = fw_client
         self.orig_dir = orig_dir
@@ -51,11 +51,11 @@ class BaseCollector(ABC):
         print(flywheel_file.name)
         if flywheel_file.get("info") and flywheel_file["info"].get("ohifViewer"):
             self.ohifviewer_info = flywheel_file["info"].get("ohifViewer")
-            print('info on file')
+            print("info on file")
 
         else:
             # session stores the OHIF annotations
-            print('info on session')
+            print("info on session")
             session = self.fw_client.get_session(flywheel_file["parents"]["session"])
             print(session.label)
             self.ohifviewer_info = session.info.get("ohifViewer")
@@ -74,11 +74,12 @@ class BaseCollector(ABC):
         for sub in cls.__subclasses__():
             if type_.lower() == sub.type_:
                 return sub(fw_client, file_object, orig_dir)
-        raise NotImplementedError(f'File type {type_} no supported')
+        raise NotImplementedError(f"File type {type_} no supported")
 
 
 class DicomRoiCollector(BaseCollector):
     type_ = "dicom"
+
     def collect(self):
         self.get_ohif_info()
         studyUID, seriesUID = self.get_current_study_series_uid()
@@ -113,8 +114,10 @@ class DicomRoiCollector(BaseCollector):
         # from there. No guarantees. But all the tags are in the WADO database...
 
         dcms = DICOMCollection.from_dir(self.orig_dir)
-        studyInstance = dcms.get('StudyInstanceUID')  # Get's value across the collection, raises a ValueError if multiple are found
-        seriesInstance = dcms.get('SeriesInstanceUID')
+        studyInstance = dcms.get(
+            "StudyInstanceUID"
+        )  # Get's value across the collection, raises a ValueError if multiple are found
+        seriesInstance = dcms.get("SeriesInstanceUID")
         return studyInstance, seriesInstance
 
     def identify_rois_on_image(self, studyInstanceUid, seriesInstanceUid):
@@ -148,11 +151,9 @@ class DicomRoiCollector(BaseCollector):
         # Now the info here only has ROI's related to this particular dicom.
         self.ohifviewer_info = new_ohif_measurements
 
+
 class NiftiRoiCollector(BaseCollector):
     type_ = "nifti"
 
     def collect(self):
         pass
-
-
-

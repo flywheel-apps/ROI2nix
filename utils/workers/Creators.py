@@ -1,4 +1,3 @@
-
 from abc import ABC, abstractmethod
 from collections import OrderedDict
 from dataclasses import dataclass
@@ -49,10 +48,13 @@ Full process:
 class BaseCreator(ABC):
     # Type key set on each base class to identify which class to instantiate
     type_ = None
-    def __init__(self, orig_dir, roi_dir, output_dir, base_file_name, combine, bitmask, converter):
+
+    def __init__(
+        self, orig_dir, roi_dir, output_dir, base_file_name, combine, bitmask, converter
+    ):
         self.orig_dir = orig_dir
         self.roi_dir = roi_dir
-        self.output_dir = output_dir # Not actually used anywhere...
+        self.output_dir = output_dir  # Not actually used anywhere...
         self.base_file_name = base_file_name
         self.combine = combine
         self.bitmask = bitmask
@@ -103,13 +105,19 @@ class BaseCreator(ABC):
                     # up.
                     roi_color = roi.get("color", "rgba(187, 192, 5, 0.2)")
                     rgba = rgba_regex.match(roi_color)
-                    rgba = [int(rgba.group("R")), int(rgba.group("G")), int(rgba.group("B")), float(rgba.group("A"))]
+                    rgba = [
+                        int(rgba.group("R")),
+                        int(rgba.group("G")),
+                        int(rgba.group("B")),
+                        float(rgba.group("A")),
+                    ]
 
                     labels[roi["location"]] = RoiLabel(
                         index=int(2 ** (len(labels))),
                         RGB=rgba,
                         color=f"#{hex(rgba[0])[2:]}{hex(rgba[1])[2:]}{hex(rgba[2])[2:]}",
-                        label=roi["location"])
+                        label=roi["location"],
+                    )
 
             else:
                 log.warning(
@@ -128,20 +136,41 @@ class BaseCreator(ABC):
         pass
 
     @classmethod
-    def factory(cls, type_: str, orig_dir, roi_dir, output_dir, base_file_name, combine, bitmask, converter):
+    def factory(
+        cls,
+        type_: str,
+        orig_dir,
+        roi_dir,
+        output_dir,
+        base_file_name,
+        combine,
+        bitmask,
+        converter,
+    ):
         """Return an instantiated Creator."""
         for sub in cls.__subclasses__():
             if type_.lower() == sub.type_:
-                return sub(orig_dir, roi_dir, output_dir, base_file_name, combine, bitmask, converter)
-        raise NotImplementedError(f'File type {type_} no supported')
-
+                return sub(
+                    orig_dir,
+                    roi_dir,
+                    output_dir,
+                    base_file_name,
+                    combine,
+                    bitmask,
+                    converter,
+                )
+        raise NotImplementedError(f"File type {type_} no supported")
 
 
 class DicomCreator(BaseCreator):
     type_ = "dicom"
 
-    def __init__(self, orig_dir, roi_dir, output_dir, base_file_name, combine, bitmask, converter):
-        super().__init__(orig_dir, roi_dir, output_dir, base_file_name, combine, bitmask, converter)
+    def __init__(
+        self, orig_dir, roi_dir, output_dir, base_file_name, combine, bitmask, converter
+    ):
+        super().__init__(
+            orig_dir, roi_dir, output_dir, base_file_name, combine, bitmask, converter
+        )
         self.dicoms = {}
         self.max_labels = 31
 
@@ -150,7 +179,6 @@ class DicomCreator(BaseCreator):
         self.get_dicoms()
         self.make_data(labels, ohifviewer_info)
         return labels
-
 
     def generate_name(self, label, combine):
         if combine:
@@ -171,22 +199,21 @@ class DicomCreator(BaseCreator):
 
         return output_filename
 
-
     def get_dicoms(self):
         # Acquire ROI data
         self.dicoms = DICOMCollection.from_dir(self.orig_dir)
         self.shape = [
-            self.dicoms.get('Rows'), 
+            self.dicoms.get("Rows"),
             # May be more robust to check pixel array sizes if Rows or Columns is missing, but also might want to know if size of image changes across archive.
-            self.dicoms.get('Columns'),
-              # To do what you had: self.dicoms[0].dataset.raw.pixel_array.shape[1]
+            self.dicoms.get("Columns"),
+            # To do what you had: self.dicoms[0].dataset.raw.pixel_array.shape[1]
             len(self.dicoms),
         ]
 
     def get_affine(self):
 
-        sbs = self.dicoms.get('SpacingBetweenSlices')
-        pixelspacing = self.dicoms[0].get('PixelSpacing')
+        sbs = self.dicoms.get("SpacingBetweenSlices")
+        pixelspacing = self.dicoms[0].get("PixelSpacing")
 
         # positions = np.mat(
         #     [loaded_dicom.ImagePositionPatient for dpath,loaded_dicom in self.dicoms.items()]
@@ -212,7 +239,6 @@ class DicomCreator(BaseCreator):
         )
 
         return affine
-
 
     def make_data(self, labels, ohifviewer_info):
         self.set_bit_level(labels)
@@ -246,7 +272,6 @@ class DicomCreator(BaseCreator):
             self.save_to_roi_dir(data)
             output_filename = self.generate_name(label_name, combine=True)
             self.converter.convert(output_filename)
-
 
     def set_bit_level(self, labels):
         # If we're not combining and binary masks are ok, we don't need to bitmask, we'll leave at default 8 bit
@@ -288,7 +313,7 @@ class DicomCreator(BaseCreator):
         data = data.astype(self.dtype)
 
         for dicom_info in self.dicoms:
-            i = dicom_info.InstanceNumber-1
+            i = dicom_info.InstanceNumber - 1
             dicom_file = Path(dicom_info.filepath)
             dicom_data = pydicom.read_file(dicom_file)
             file_name = dicom_file.name
@@ -309,7 +334,7 @@ class DicomCreator(BaseCreator):
         data, sop, roi_handles, roi_type="FreehandRoi", dicoms=None, reactOHIF=True
     ):
 
-        dicom_sops = dicoms.bulk_get('SOPInstanceUID')
+        dicom_sops = dicoms.bulk_get("SOPInstanceUID")
         slice = dicom_sops.index(sop)
 
         swap_axes = True
@@ -371,5 +396,6 @@ class NiftiCreator(BaseCreator):
 
     def get_affine(self):
         pass
+
     def create(self):
         pass
