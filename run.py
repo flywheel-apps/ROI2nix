@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin python3
 import logging
 
 from flywheel_gear_toolkit import GearToolkitContext

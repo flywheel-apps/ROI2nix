@@ -48,7 +48,10 @@ Full process:
 """
 
 SLICER_SCRIPT = f"{os.environ['SCRIPT_DIR']}/RunSlicerExport.py"
-
+SLICER_PATH="Slicer"
+PLASTIMATCH_PATH="plastimatch"
+DCM2NIIX_PATH="dcm2niix"
+DICOM2NIFTI_PATH="dicom2nifti"
 
 class BaseConverter(ABC):
     type_ = None
@@ -72,7 +75,6 @@ class BaseConverter(ABC):
         """Return an instantiated prepper."""
         print(type_)
         for sub in cls.__subclasses__():
-            print(sub.type_)
             if type_.lower() == sub.type_:
                 return sub(orig_dir=orig_dir,
                             roi_dir=roi_dir,
@@ -97,8 +99,11 @@ class dcm2niix(BaseConverter):
         if self.conversion.ext == NRRD_TYPE:
             nrrd_cmd = ['-e', 'y']
 
-        command = [
-            "dcm2niix",
+        # command = ["xvfb-run",
+        #     "env"
+        # ]
+        command = ["xvfb-run",
+            DCM2NIIX_PATH,
             "-o",
             self.output_dir.as_posix(),
             "-f",
@@ -116,8 +121,10 @@ class dcm2niix(BaseConverter):
 class slicer_dcmtk(BaseConverter):
     type_ = "slicer-dcmtk"
     def run_command(self, command):
+        #os.system(' '.join(command))
         pr = sp.Popen(command)
         pr.wait()
+        #raise Exception()
 
     def convert(self, output_filename):
         command = self.make_command(output_filename)
@@ -126,8 +133,12 @@ class slicer_dcmtk(BaseConverter):
     def make_command(self, output_filename):
         output_filename = output_filename+f'.{self.ext}'
 
+        # command = ["xvfb-run",
+        #     "env"
+        # ]
+
         command = ["xvfb-run",
-            "Slicer",
+            SLICER_PATH,
             "--python-script",
             SLICER_SCRIPT,
             "--dcmtk",
@@ -168,7 +179,7 @@ class slicer_gdcm(BaseConverter):
         output_filename = output_filename+f'.{self.ext}'
 
         command = ["xvfb-run",
-            "Slicer",
+            SLICER_PATH,
             "--python-script",
             SLICER_SCRIPT,
             "--gdcm",
@@ -195,7 +206,7 @@ class slicer_arch(BaseConverter):
         output_filename = output_filename+f'.{self.ext}'
 
         command = ["xvfb-run",
-            "Slicer",
+            SLICER_PATH,
             "--python-script",
             SLICER_SCRIPT,
             "--archetype",
@@ -223,7 +234,7 @@ class plastimatch(BaseConverter):
     def make_command(self, output_filename):
 
         output_filename = os.path.join(self.output_dir.as_posix(), output_filename+f'.{self.ext}')
-        command = ["plastimatch",
+        command = [PLASTIMATCH_PATH,
                    "convert",
                    "--input",
                    self.roi_dir.as_posix(),
@@ -248,7 +259,7 @@ class dicom2nifti(BaseConverter):
     def make_command(self):
 
 
-        command = ["dicom2nifti",
+        command = [DICOM2NIFTI_PATH,
                    self.roi_dir.as_posix(),
                    self.output_dir.as_posix()
         ]

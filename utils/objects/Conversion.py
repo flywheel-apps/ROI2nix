@@ -56,7 +56,7 @@ class ConversionType:
     def __post_init__(self):
         if self.method_name in ['dcm2niix']:
             self.method = METHOD_DCM2NIIX
-        elif self.method_name in ['slicer-dcmtk', 'slicer-arch', 'slicer-gdmc']:
+        elif self.method_name in ['slicer-dcmtk', 'slicer-arch', 'slicer-gdcm']:
             self.method = METHOD_SLICER
         elif self.method_name in ['plastimatch']:
             self.method = METHOD_PLASTIMATCH

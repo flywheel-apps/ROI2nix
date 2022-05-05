@@ -14,8 +14,9 @@ WORKDIR ${FLYWHEEL}
 #############################################################
 ## Step 0: setup directory structures         ##
 #############################################################
-ENV CONVERTER_DIR=${FLYWHEEL}/converters \
-    SCRIPT_DIR=${CONVERTER_DIR}/scripts \
+ENV CONVERTER_DIR=${FLYWHEEL}/converters
+
+ENV SCRIPT_DIR=${CONVERTER_DIR}/scripts \
     # Setup slicer dir https://www.slicer.org/
     SLICER_DIR=${CONVERTER_DIR}/slicer \
     SLICER_DOCKER_DIR=${CONVERTER_DIR}/slicer_docker \
@@ -176,7 +177,7 @@ RUN chmod a+x /flywheel/v0/run.py
 
 RUN mkdir ${FLYWHEEL}/rosetta
 RUN mkdir ${FLYWHEEL}/scrap
-RUN ln -s ${SCRIPT_DIR}/SlicerConvert.py /usr/src/SlicerConvert.py
+#RUN ln -s ${SCRIPT_DIR}/SlicerConvert.py /usr/src/SlicerConvert.py
 RUN chmod 7700 /tmp/runtime-sliceruser
 ADD tests ${FLYWHEEL}/tests
 

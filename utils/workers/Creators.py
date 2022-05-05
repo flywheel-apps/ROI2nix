@@ -105,12 +105,12 @@ class BaseCreator(ABC):
                     rgba = rgba_regex.match(roi_color)
                     rgba = [int(rgba.group("R")), int(rgba.group("G")), int(rgba.group("B")), float(rgba.group("A"))]
 
-                    labels[roi["location"]] = {
-                        "index": int(2 ** (len(labels))),
-                        "RGB": rgba,
-                        "RGB": rgba,
-                        "color": f"#{hex(rgba[0])[2:]}{hex(rgba[1])[2:]}{hex(rgba[2])[2:]}"
-                    }
+                    labels[roi["location"]] = RoiLabel(
+                        index=int(2 ** (len(labels))),
+                        RGB=rgba,
+                        color=f"#{hex(rgba[0])[2:]}{hex(rgba[1])[2:]}{hex(rgba[2])[2:]}",
+                        label=roi["location"])
+
             else:
                 log.warning(
                     "There is an ROI without a label. To include this ROI in the "
@@ -134,8 +134,6 @@ class BaseCreator(ABC):
             if type_.lower() == sub.type_:
                 return sub(orig_dir, roi_dir, output_dir, base_file_name, combine, bitmask, converter)
         raise NotImplementedError(f'File type {type_} no supported')
-
-
 
 
 
@@ -271,7 +269,7 @@ class DicomCreator(BaseCreator):
                 )
 
     def label2data(self, label, ohifviewer_info):
-        data = np.zeros(self.shape, dtype=np.bool)
+        data = np.zeros(self.shape, dtype=bool)
         for roi_type in ohifviewer_info:
             for roi in ohifviewer_info[roi_type]:
                 if roi.get("location") == label:

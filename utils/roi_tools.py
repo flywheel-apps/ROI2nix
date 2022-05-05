@@ -76,7 +76,7 @@ def poly2mask(vertex_row_coords, vertex_col_coords, shape):
     fill_row_coords, fill_col_coords = draw.polygon(
         vertex_row_coords, vertex_col_coords, shape
     )
-    mask = np.zeros(shape, dtype=np.bool)
+    mask = np.zeros(shape, dtype=bool)
     mask[fill_row_coords, fill_col_coords] = True
     return mask
 
@@ -205,7 +205,7 @@ def ellipse2mask(start, end, shape, axes_flips, swap_axes=False):
         r_center, c_center, r_radius, c_radius, shape
     )
 
-    mask = np.zeros(shape, dtype=np.bool)
+    mask = np.zeros(shape, dtype=bool)
     mask[fill_row_coords, fill_col_coords] = True
 
     return mask

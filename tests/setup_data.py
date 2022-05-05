@@ -4,6 +4,8 @@ import gzip
 import json
 import os
 import shutil
+from dateutil.tz import tzutc
+import datetime
 
 cwd = os.path.dirname(__file__)
 DICOM_TEST_DATA = os.path.join(cwd, "test_data/DICOM/T2_Phantom.dicom.zip")
