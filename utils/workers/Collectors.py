@@ -87,22 +87,22 @@ class DicomRoiCollector(BaseCollector):
 
         return self.ohifviewer_info
 
-    def get_one_dicom(self):
-        dicom = None
-        for root, _, files in os.walk(str(self.orig_dir), topdown=False):
-            for fl in files:
-                try:
-                    dicom_path = Path(root) / fl
-                    dicom = pydicom.read_file(dicom_path, force=True)
-                    break
-                except Exception as e:
-                    log.warning("Could not open dicom file. Trying another.")
-                    log.exception(e)
-                    pass
-            if dicom:
-                break
-
-        return dicom
+    # def get_one_dicom(self):
+    #     dicom = None
+    #     for root, _, files in os.walk(str(self.orig_dir), topdown=False):
+    #         for fl in files:
+    #             try:
+    #                 dicom_path = Path(root) / fl
+    #                 dicom = pydicom.read_file(dicom_path, force=True)
+    #                 break
+    #             except Exception as e:
+    #                 log.warning("Could not open dicom file. Trying another.")
+    #                 log.exception(e)
+    #                 pass
+    #         if dicom:
+    #             break
+    #
+    #     return dicom
 
     def get_current_study_series_uid(self):
         # need studyInstanceUid and seriesInstanceUid from DICOM series to select

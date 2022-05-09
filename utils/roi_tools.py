@@ -26,7 +26,7 @@ class InvalidDICOMFile(Exception):
     """
 
     def __init__(self, message):
-        Exception.__init__(self)
+        super().__init__(self)
         self.message = message
 
 
@@ -39,7 +39,7 @@ class InvalidConversion(Exception):
     """
 
     def __init__(self, message):
-        Exception.__init__(self)
+        super().__init__(self)
         self.message = message
 
 
@@ -52,7 +52,7 @@ class InvalidROIError(Exception):
     """
 
     def __init__(self, message):
-        Exception.__init__(self)
+        super().__init__(self)
         self.message = message
 
 

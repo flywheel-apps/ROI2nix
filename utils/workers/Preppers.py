@@ -98,10 +98,7 @@ class PrepDicom(BasePrepper):
         except Exception as e:
             log.exception(e)
             error_message = (
-                "An invalid dicom file was encountered. "
-                '"SeriesInstanceUID", "InstanceNumber", '
-                '"ImageOrientationPatient", or "ImagePositionPatient"'
-                " may be missing from the DICOM series."
+                "Unable to find or open dicom file"
             )
             raise InvalidDICOMFile(error_message)
 
