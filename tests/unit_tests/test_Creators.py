@@ -10,6 +10,7 @@ from unittest.mock import MagicMock
 from unittest.mock import patch
 from tests import setup_data as sd
 from fw_file.dicom import DICOMCollection
+from utils.objects.Labels import RoiLabel
 
 
 os.environ["SCRIPT_DIR"] = os.path.join(sd.cwd, "utils/SlicerScripts")
@@ -68,11 +69,42 @@ def test_BaseCreator_get_labels():
         converter=None,
     )
     labels = creator.get_labels(metadata_json)
+    print(labels)
     assert labels == OrderedDict(
         [
-            ("Lesion", {"index": 1, "RGB": [244, 67, 54, 0.2], "color": "#f44336"}),
-            ("Potato", {"index": 2, "RGB": [205, 220, 57, 0.2], "color": "#cddc39"}),
-            ("Doggy", {"index": 4, "RGB": [76, 175, 80, 0.2], "color": "#4caf50"}),
+            (
+                "Lesion",
+                RoiLabel(
+                    label="Lesion",
+                    index=1,
+                    color="#f44336",
+                    RGB=[244, 67, 54, 0.2],
+                    num_voxels=0,
+                    volume=0.0,
+                ),
+            ),
+            (
+                "Potato",
+                RoiLabel(
+                    label="Potato",
+                    index=2,
+                    color="#cddc39",
+                    RGB=[205, 220, 57, 0.2],
+                    num_voxels=0,
+                    volume=0.0,
+                ),
+            ),
+            (
+                "Doggy",
+                RoiLabel(
+                    label="Doggy",
+                    index=4,
+                    color="#4caf50",
+                    RGB=[76, 175, 80, 0.2],
+                    num_voxels=0,
+                    volume=0.0,
+                ),
+            ),
         ]
     )
 
