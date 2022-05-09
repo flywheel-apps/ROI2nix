@@ -167,7 +167,7 @@ ENV XDG_RUNTIME_DIR=/tmp/runtime-sliceruser
 
 
 # Copy executable/manifest to Gear
-COPY run.py manifest.json my_tests.py ${FLYWHEEL}/
+COPY run.py manifest.json ${FLYWHEEL}/
 COPY utils/SlicerScripts/RunSlicerExport.py ${SCRIPT_DIR}/RunSlicerExport.py
 # COPY utils/SlicerScripts/Slicer_Export.py ${SCRIPT_DIR}/Slicer_Export.py
 
@@ -175,11 +175,7 @@ COPY utils/SlicerScripts/RunSlicerExport.py ${SCRIPT_DIR}/RunSlicerExport.py
 ADD utils ${FLYWHEEL}/utils
 RUN chmod a+x /flywheel/v0/run.py
 
-RUN mkdir ${FLYWHEEL}/rosetta
-RUN mkdir ${FLYWHEEL}/scrap
-#RUN ln -s ${SCRIPT_DIR}/SlicerConvert.py /usr/src/SlicerConvert.py
 RUN chmod 7700 /tmp/runtime-sliceruser
-ADD tests ${FLYWHEEL}/tests
 
 # Configure entrypoint
 ENTRYPOINT ["/flywheel/v0/run.py"]
