@@ -1,3 +1,5 @@
+** THIS REPO GOT MOVED TO https://gitlab.com/flywheel-io/flywheel-apps/roi2nix **
+
 # ROI2nix
 
 Converts ROIs created in the Flywheel OHIF viewer to NIfTI files.
