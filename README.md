@@ -1,4 +1,4 @@
-** THIS REPO GOT MOVED TO https://gitlab.com/flywheel-io/flywheel-apps/roi2nix **
+**THIS REPO GOT MOVED TO https://gitlab.com/flywheel-io/flywheel-apps/roi2nix**
 
 # ROI2nix
 
